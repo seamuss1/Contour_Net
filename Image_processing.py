@@ -1,4 +1,4 @@
-import os, time, cv2,datetime
+import os, time, cv2,datetime,traceback
 import cv2 as cv
 import numpy as np
 import tkinter as tk
@@ -25,9 +25,9 @@ class Make_Contours(tk.Frame):
         self.extension = extension
         self.drawmode = None
 
-##        s=ttk.Style()
+        s=ttk.Style()
 ##        print(s.theme_names())
-##        s.theme_use('winnative')
+        s.theme_use('xpnative')
         self.frame1=tk.Frame(master=parent)
         self.frame1.grid(column=0,row=0)
         self.frame2=tk.Frame(master=parent)
@@ -42,6 +42,8 @@ class Make_Contours(tk.Frame):
         #plt.gca().invert_yaxis()
         self.ax.set_axis_off()
         self.fig.subplots_adjust(left=0.03, bottom=0.07, right=0.98, top=0.97, wspace=0, hspace=0)
+        self.im = 255 * np.ones(shape=[1200, 1600, 3], dtype=np.uint8)
+        self.image = self.ax.imshow(self.im)
         #self.fig.set_size_inches((8,8))
         
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.frame1)
@@ -52,44 +54,64 @@ class Make_Contours(tk.Frame):
         self.canvas._tkcanvas.pack()
         self.canvas.mpl_connect("key_press_event", self.on_key_press)
         self.fig.canvas.callbacks.connect('button_press_event', self.callback)
-        self.submit = tk.Button(master=self.frame3,text='Save Contour',command=self.submit_contour)
-        self.submit.pack()
 
 
-        tk.Label(self.frame2,text='Input Parameters: ').grid(column=1,row=1)
+
+        tk.Label(self.frame2,text='Input Parameters: ').grid(column=0,row=1)
         self.e1,self.e2,self.e3 = tk.Entry(self.frame2, width=9),tk.Entry(self.frame2,width=9),tk.Entry(self.frame2,width=9)
         self.e1.grid(row=1,column=2)
-        self.e2.grid(row=1,column=3)
-        self.e3.grid(row=1,column=4)
+        self.e2.grid(row=1,column=4)
+        self.e3.grid(row=1,column=6)
+        tk.Label(self.frame2,text='Name').grid(column=1,row=1)
+        tk.Label(self.frame2,text='Material').grid(column=3,row=1)
+        tk.Label(self.frame2,text='Curing Time').grid(column=5,row=1)
+        self.params = dict(name=self.e1,material=self.e2,Print_Time=self.e3)
 
         
-        self.refresh = tk.Button(self.frame2,text='Refresh Image',command=self.refresh_image)
-        self.refresh.grid(row=0,column=5)
-        self.prev = tk.Button(self.frame2,text='Previous',command=self.prev_image)
-        self.prev.grid(row=0,column=6)
-        self.next = tk.Button(self.frame2,text='Next',command=self.next_image)
-        self.next.grid(row=0,column=7)
+        self.prev = tk.Button(self.frame4,text='Previous',command=self.prev_image)
+        self.prev.grid(row=0,column=3)
+        self.next = tk.Button(self.frame4,text='Next',command=self.next_image)
+        self.next.grid(row=0,column=4)
 
-        blackbutton = tk.Button(self.frame4,text='black pixels',command=self.black_pixel)
+        blackbutton = tk.Button(self.frame4,text='New Contour',command=self.black_pixel)
         blackbutton.grid(column=3,row=1)
         undobutton = tk.Button(self.frame4,text='Undo',command=self.undo_draw)
         undobutton.grid(column=4,row=1)
-        drawingexit = tk.Button(self.frame4,text='Exit drawing',command=self.exit_drawing)
+        drawingexit = tk.Button(self.frame4,text='Pause',command=self.exit_drawing)
         drawingexit.grid(column=5,row=1)
+        savedrawing = tk.Button(self.frame4,text='Save',command=self.save_contour)
+        savedrawing.grid(column=6,row=1)
         self.coords = []
+        self.redo = []
         self.make_list()
         self.open_image()
-        self.update_plot()
+        
     def undo_draw(self):
         try:
-            del self.coords[-1]
+            oldpoint = self.coords.pop()
+            self.redo.append(oldpoint)
         except IndexError:
             pass
         self.update_plot()
+
+    def redo_draw(self):
+        try:
+            oldpoint = self.redo.pop(0)
+            self.coords.append(oldpoint)
+        except IndexError as e:
+            pass
+        self.update_plot()
+        
     def exit_drawing(self):
         self.drawmode = None
         
     def black_pixel(self):
+        if self.coords != []:
+            MsgBox = tk.messagebox.askquestion ('Start New Contour','Are you sure you want to start a new contour?',icon = 'warning')
+            if MsgBox == 'no':
+                return
+        self.coords = []
+        self.update_plot()
         self.drawmode = 'black'
         
     def next_image(self):
@@ -98,19 +120,18 @@ class Make_Contours(tk.Frame):
             file = self.flist[self.index]
         except:
             self.index -=1
-            print('Index Error')
         self.open_image()
-        self.update_plot()
         
     def prev_image(self):
         try:
             self.index-=1
+            if self.index <=0:
+                self.index+=1
+                return
             file = self.flist[self.index]
         except:
             self.index +=1
-            print('Index Error')
         self.open_image()
-        self.update_plot()
     
     def refresh_image(self):
         try:
@@ -119,26 +140,34 @@ class Make_Contours(tk.Frame):
             print('Threshold values need to be integers')
             return
         self.update_plot()
-    def submit_contour(self):
-        try:
-            int(self.thresh1.get()),int(self.thresh2.get()),int(self.thresh3.get())
-        except:
-            print('Threshold values need to be integers')
-            return
-        self.filename = 'pickle'+str(datetime.datetime.now())[-6:]+'.pickle'
-        dic = dict(original_image=self.im,contours=self.contours)
+        
+    def save_contour(self):
+        parameters=dict()
+        self.filename = self.image_name
+        for line in self.params:
+            text=str(self.params[line].get())
+            parameters[line] = text
+            self.filename += text
+        
+        self.filename +='.pickle'
+        parameters['contours'] = self.coords
+        parameters['Original_image'] = self.im
         with open('Database/'+self.filename, 'wb') as file:
-            pickle.dump(dic,file)
-        try:
-            self.index+=1
-        except:
-            print('Index Error')
-        self.open_image()
-        self.update_plot()
+            pickle.dump(parameters,file)
+        self.coords = []
+        self.next_image()
     
     def open_image(self):
-        file = self.flist[self.index]
-        self.im = cv.imread(file)
+        try:
+            file = self.flist[self.index]
+            self.im = cv.imread(file)
+            _,self.image_name = os.path.split(file)
+        except IndexError as e:
+            print(traceback.print_exc())
+            self.im = 255 * np.ones(shape=[1200, 1600, 3], dtype=np.uint8)
+        self.imcontour = np.copy(self.im)
+        self.update_plot()
+        
     def update_plot(self):
         self.imcontour = np.copy(self.im)
         points = np.array(self.coords)
@@ -147,29 +176,33 @@ class Make_Contours(tk.Frame):
         except Exception as e:
             print(e)
         self.imcontour = cv2.cvtColor(self.imcontour, cv2.COLOR_BGR2RGB)
-        
-        self.ax.imshow(self.imcontour)
+        self.image.set_data(self.imcontour)
         self.canvas.draw()
-    def update_contours(self, contours):
-        print('update contour')
+        
     def on_key_press(self, event):
         key_press_handler(event, self.canvas, self.toolbar)
-        print(event,event.x,event.y)
+        print(event.key)
+        if event.key == 'right':
+            self.next_image()
+        if event.key == 'left':
+            self.prev_image()
+        if event.key == 'p':
+            self.drawmode == None
+        if event.key == 'ctrl+z':
+            self.undo_draw()
+        if event.key == 'ctrl+r':
+            self.redo_draw()
+
         self.toolbar.update()
+        
     def callback(self,event):
         if self.drawmode != None:
-            if self.drawmode == 'black':
-                self.drawcolor = 0
-            if event.x == None or event.y == None:
+            self.redo = []
+            if event.xdata == None or event.ydata == None:
                 return
-            self.pensize = 0.5
             x,y = int(round(event.xdata)), int(round(event.ydata))
             self.coords.append((x,y))
-##            self.im[y,x] = self.drawcolor
-##            for m in range(x-self.pensize,x+self.pensize):
-##                for n in range(y-self.pensize,y+self.pensize):
-##                    self.im[n,m] = self.drawcolor
-            print("clicked at", event.xdata, event.ydata,round(event.xdata))
+##            print("clicked at", event.xdata, event.ydata,round(event.xdata))
             self.update_plot()
             
     def make_list(self):
@@ -181,7 +214,6 @@ class Make_Contours(tk.Frame):
         for folder in self.dirs:
             try:
                 for f in os.listdir(folder):
-            
                     if not os.path.isfile(f):
                         self.dirs.append(folder+'/'+f)
             except:
@@ -190,18 +222,6 @@ class Make_Contours(tk.Frame):
         self.index=0
 
 
-
-class Page(tk.Frame):
-    def __init__(self, *args, **kwargs):
-        tk.Frame.__init__(self)
-    def show(self):
-        self.lift()
-
-class Page1(tk.Frame):
-   def __init__(self, *args, **kwargs):
-       tk.Frame.__init__(self)
-       label = tk.Label(self, text="This is page 1")
-       label.pack(side="top", fill="both", expand=True)
 
 if __name__ == '__main__':
     root = tk.Tk()

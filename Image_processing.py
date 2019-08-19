@@ -1,4 +1,4 @@
-import os, time, cv2,datetime,traceback
+import os, time, cv2,datetime,traceback,sys
 import cv2 as cv
 import numpy as np
 import tkinter as tk
@@ -85,7 +85,8 @@ class Make_Contours(tk.Frame):
         self.redo = []
         self.make_list()
         self.open_image()
-        
+##        parent.destroy()
+
     def undo_draw(self):
         try:
             oldpoint = self.coords.pop()
@@ -168,6 +169,7 @@ class Make_Contours(tk.Frame):
         self.imcontour = np.copy(self.im)
         self.update_plot()
         
+        
     def update_plot(self):
         self.imcontour = np.copy(self.im)
         points = np.array(self.coords)
@@ -181,7 +183,6 @@ class Make_Contours(tk.Frame):
         
     def on_key_press(self, event):
         key_press_handler(event, self.canvas, self.toolbar)
-        print(event.key)
         if event.key == 'right':
             self.next_image()
         if event.key == 'left':
@@ -220,12 +221,12 @@ class Make_Contours(tk.Frame):
                 if folder.endswith('.tif') or folder.endswith('.jpg'):
                     self.flist.append(folder)
         self.index=0
-
-
+def n(self):
+    pass
 
 if __name__ == '__main__':
     root = tk.Tk()
+    root.protocol('WM_DELETE_WINDOW', exit)
     app = Make_Contours(root)
     root.mainloop()
-
 

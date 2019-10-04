@@ -26,6 +26,8 @@ class Make_Contours(tk.Frame):
         self.drawmode = None
         self.coords_count = -1
         self.coords = []
+        self.display_distance = False
+        self.scale = 1
         self.parent.bind('<Key>',self.key_bindings)
         s=ttk.Style()
 ##        print(s.theme_names())
@@ -71,6 +73,11 @@ class Make_Contours(tk.Frame):
         menubar.add_cascade(label="Generate Contours", menu=conmenu)
         parent.config(menu=menubar)
 
+        measmenu = tk.Menu(menubar, tearoff=0)
+        measmenu.add_command(label="Distance", command=self.measure_distance)
+        measmenu.add_command(label="Calibrate", command=self.calibrate)
+        measmenu.add_separator()
+        menubar.add_cascade(label="Measure", menu=measmenu)
         
         self.fig,self.ax = plt.subplots(1,1)
         #plt.gca().invert_yaxis()
@@ -109,7 +116,10 @@ class Make_Contours(tk.Frame):
         self.prev.grid(row=0,column=3)
         self.next = tk.Button(self.frame4,text='Next',command=self.next_image)
         self.next.grid(row=0,column=4)
-
+        tk.Label(self.frame4,text=' Thresh: ').grid(row=0,column=5)
+        self.threshslider = tk.Scale(self.frame4,label='Thresh',from_=0, to=255, orient=tk.HORIZONTAL, resolution=1)
+        self.threshslider.set(100)
+        self.threshslider.grid(row=0,column=6)
         blackbutton = tk.Button(self.frame4,text='New Contour',command=self.black_pixel)
         blackbutton.grid(column=3,row=1)
 ##        undobutton = tk.Button(self.frame4,text='Undo',command=self.undo_draw)
@@ -126,6 +136,10 @@ class Make_Contours(tk.Frame):
         self.make_list()
         self.open_image()
 
+    
+    def calibrate(self):
+        self.drawmode = 'calibrate'
+        self.calpoint = []
     def open_file(self):
         from tkinter import filedialog
         filename =  filedialog.askopenfilename(title = "Select file",filetypes = (("pickle files","*.pickle"),("all files","*.*")))
@@ -144,17 +158,8 @@ class Make_Contours(tk.Frame):
         self.update_plot()
 
     def generate_contours(self):
-##        image = cv2.imread(self.flist[self.index])
-##        im_bw = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-##
-##        (thresh, im_bw) = cv2.threshold(im_bw,  127,255, 0)
-##
-##        contours, hierarchy = cv2.findContours(im_bw, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-##        cv2.drawContours(image, contours, -1, (0,255,0), 3)
-##        cv2.imwrite('contours_test.png', image)
-##        return
         im_bw = cv2.cvtColor(self.im, cv2.COLOR_RGB2GRAY) #Needs to be converted to black and white
-        ret, thresh = cv.threshold(im_bw, 127,255,cv2.THRESH_BINARY)
+        ret, thresh = cv.threshold(im_bw, self.threshslider.get(),255,cv2.THRESH_BINARY)
         contours, heirarchy = cv.findContours(thresh, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
         contours = [i for i in contours if 500000 > cv.contourArea(i) and cv.contourArea(i)>2000]
 ##        cv2.imshow('image', self.image)
@@ -164,7 +169,6 @@ class Make_Contours(tk.Frame):
             for i in contour:
                 (x,y) = i[0][0],i[0][1]
                 format_contour.append((x,y))
-
             self.coords.append(format_contour)
         self.update_plot()
         
@@ -290,6 +294,15 @@ class Make_Contours(tk.Frame):
                 cv2.polylines(self.imcontour,np.int32([points]),True,color=colr,thickness=2)
             except Exception as e:
                 print(traceback.format_exc())
+        if self.display_distance == True:
+            d = ((self.mp[1][0]-self.mp[0][0])**2+(self.mp[0][1]-self.mp[1][1])**2)**1/2
+            d = round(d*self.scale,2)
+            mx,my = ((self.mp[1][0]+self.mp[0][0])/2,(self.mp[0][1]+self.mp[1][1])/2)
+            cv2.putText(self.imcontour,f'{d}',(int(mx-80), int(my-10)),cv2.FONT_HERSHEY_SIMPLEX, 1.85, (0,0,0), 2)
+            print(mx,my)
+            print('distance: ', d)
+            cv2.line(self.imcontour, (self.mp[0][0], self.mp[0][1]), (self.mp[1][0], self.mp[1][1]), (0,0,255), 5)
+            self.display_distance = False
         self.imcontour = cv2.cvtColor(self.imcontour, cv2.COLOR_BGR2RGB)
         self.image.set_data(self.imcontour)
         self.canvas.draw()
@@ -317,9 +330,13 @@ class Make_Contours(tk.Frame):
             self.next_con()
         if event.keysym == 'n':
             self.black_pixel()
-            
+
+    def measure_distance(self):
+        self.drawmode = 'linear_measure'
+        self.mp = []
+        
     def callback(self,event):
-        if self.drawmode != None:
+        if self.drawmode == 'black':
             self.redo = []
             if event.xdata == None or event.ydata == None:
                 return
@@ -336,7 +353,42 @@ class Make_Contours(tk.Frame):
             except AttributeError:
                 np.append(self.coords[self.coords_count],(x,y))
             self.update_plot()
-
+            
+        if self.drawmode == 'linear_measure':
+            if event.xdata == None or event.ydata == None:
+                return
+            x,y = event.xdata, event.ydata
+            height,width = self.im.shape[0], self.im.shape[1]
+            x = int(round(x*(width/self.ymax)))
+            y = int(round(y*(height/self.xmax)))
+            print(x,y)
+            if len(self.mp) <2:
+                self.mp.append((x,y))
+            if len(self.mp) >= 2:
+                
+                self.display_distance = True
+                self.update_plot()
+                self.mp = []
+        if self.drawmode == 'calibrate':
+            if event.xdata == None or event.ydata == None:
+                return
+            x,y = event.xdata, event.ydata
+            height,width = self.im.shape[0], self.im.shape[1]
+            x = int(round(x*(width/self.ymax)))
+            y = int(round(y*(height/self.xmax)))
+            if len(self.calpoint) <2:
+                self.calpoint.append((x,y))
+            if len(self.calpoint) >= 2:
+                from tkinter.simpledialog import askstring
+                d = ((self.calpoint[1][0]-self.calpoint[0][0])**2+(self.calpoint[0][1]-self.calpoint[1][1])**2)**1/2
+                try:
+                    true_distance = int(askstring('Scale', 'What is the calibration scale?'))
+                except TypeError as e:
+##                    tk.messagebox.showwarning("Warning","Invalid input")
+                    self.calpoint=[]
+                    return
+                self.scale = true_distance/d
+                
     def make_list(self):
         for f in ['Input','Database']:
             if self.dirs==['Input',] and not os.path.isdir(f):

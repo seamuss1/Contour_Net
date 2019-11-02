@@ -34,6 +34,8 @@ class Make_Contours(tk.Frame):
         s.theme_use('xpnative')
         self.frame09=tk.Frame(master=parent)
         self.frame09.grid(column=0,row=0)
+        self.frame0=tk.Frame(master=parent)
+        self.frame0.grid(column=0,row=1)
         self.frame1=tk.Frame(master=parent)
         self.frame1.grid(column=0,row=3)
         self.frame2=tk.Frame(master=parent)
@@ -42,7 +44,7 @@ class Make_Contours(tk.Frame):
         self.frame3.grid(column=0,row=5)
         self.frame4=tk.Frame(master=parent)
         self.frame4.grid(column=0,row=6)
-
+        
         menubar = tk.Menu(self.frame09)
         filemenu = tk.Menu(menubar, tearoff=0)
         filemenu.add_command(label="Open", command=self.open_file)
@@ -76,8 +78,14 @@ class Make_Contours(tk.Frame):
         measmenu = tk.Menu(menubar, tearoff=0)
         measmenu.add_command(label="Distance", command=self.measure_distance)
         measmenu.add_command(label="Calibrate", command=self.calibrate)
+        measmenu.add_command(label="Auto-Measure", command=self.auto_measure)
         measmenu.add_separator()
         menubar.add_cascade(label="Measure", menu=measmenu)
+
+        self.image_strvar = tk.StringVar()
+        self.image_strvar.set('test')
+        tk.Label(master=self.frame0, textvariable = self.image_strvar).grid(column=3,row=3)
+
         
         self.fig,self.ax = plt.subplots(1,1)
         #plt.gca().invert_yaxis()
@@ -130,13 +138,147 @@ class Make_Contours(tk.Frame):
         savedrawing.grid(column=6,row=1)
         tk.Button(self.frame4,text='Clear',command=self.clear).grid(column=7,row=1)
         tk.Button(self.frame4,text='Generate Contours',command=self.generate_contours).grid(column=8,row=1)
-##        tk.Button(self.frame4,text='Previous Contour',command=self.prev_con).grid(column=9,row=1)
+        tk.Button(self.frame4,text='Home',command=self.go_home).grid(column=9,row=1)
+        tk.Button(self.frame4,text='Measure',command=self.auto_measure).grid(column=10,row=1)
         self.coords = []
         self.redo = []
         self.make_list()
         self.open_image()
 
-    
+        #Testing
+##        self.generate_contours()
+##        self.auto_measure()
+
+    def auto_measure(self):
+        average = []
+        for i in self.coords:
+            for c,p in enumerate(i):
+                average.append(p[0])
+        average = np.mean(average)
+        yval,xval = {},{}
+        self.scale=0.1383891502906172
+        for i in self.coords:
+            
+            
+            print('avg',average)
+            newavg = np.mean([f[0] for f in i])
+            print('newavg',newavg)
+            if newavg > average:
+                side = 'R'
+            if newavg<= average:
+                side='L'
+            data = np.array(i)
+            sortIndices = np.argsort(data[:,1])
+                        
+            miny = max(i, key = lambda t: t[1])
+            minx = max(i, key = lambda t: t[0])
+            maxy = min(i, key = lambda t: t[1])
+            maxx = min(i, key = lambda t: t[0])
+
+            ytargets = {'1':miny[1]-85, '2':(miny[1]+maxy[1])/2, '3':maxy[1]+85}
+            xtargets = {'4':(minx[0]+maxx[0])/2}
+            
+            print(ytargets)
+            target = miny[1]-85
+            print(target)
+            check=False
+            group = []
+            
+            
+            for c,p in enumerate(i):
+                
+                x,y = p
+                
+                for name,target in ytargets.items():
+                    if target-15< y <target+15:
+                        
+                        key = side+name
+##                        print(name, p)
+                        
+                        if key not in yval:
+                            yval[key]=[[],[]]
+                            yval[key][0].append(p[0])
+                        xavg = np.mean(yval[key][0])
+                            
+                            
+
+                        if xavg-15<x<xavg+15:      
+                            yval[key][0].append(p[0])
+                        if xavg-15>x or x>xavg+15:
+                            yval[key][1].append(p[0])
+                        
+                        cv2.circle(self.imcontour,(x,y),radius=6,thickness=6,color=(0,0,255))
+                for name,target in xtargets.items():
+                    if target-15< x <target+15:
+##                        print(x,(minx[0]+maxx[0])/2)
+                        key = side+name
+                        if key not in xval:
+                            xval[key]=[[],[],[],[]]
+                            xval[key][0].append(p[1])
+                        
+                        
+                        for c, group in enumerate(xval[key]):
+                            if xval[key][c] == []:
+                                xval[key][c].append(p[1])
+                                break
+                            yavg = np.mean(xval[key][c])
+                            if yavg-15<y<yavg+15:      
+                                xval[key][c].append(p[1])
+                                break
+                            
+                            
+
+##                        if yavg-15<y<yavg+15:      
+##                            xval[key][0].append(p[1])
+##                        if yavg-15>y or y>yavg+15:
+##                            xval[key][1].append(p[1])
+                        
+                        cv2.circle(self.imcontour,(x,y),radius=6,thickness=6,color=(0,0,255))
+
+            for i in yval:
+                yval[i][0] = np.mean(yval[i][0])
+                yval[i][1] = np.mean(yval[i][1])
+            for key,val in xval.items():
+                print(val)
+                for c,group in enumerate(val):
+                    xval[key][c] = np.mean(group)
+            print(yval)
+            print(xval)
+                       
+                
+            print('minx:',minx,'miny:',miny,'maxx:',maxx,'maxy:',maxy)
+            new = (miny[0],miny[1]-85)
+
+            
+                
+            
+##            cv2.circle(self.imcontour,minx,radius=6,thickness=6,color=(0,0,255))
+##            cv2.circle(self.imcontour,miny,radius=6,thickness=6,color=(0,0,255))
+##            cv2.circle(self.imcontour,maxx,radius=6,thickness=6,color=(0,0,255))
+##            cv2.circle(self.imcontour,maxy,radius=6,thickness=6,color=(0,0,255))
+##            cv2.circle(self.imcontour,p2,radius=6,thickness=6,color=(0,0,255))
+        L1 = abs(yval['L1'][0]-yval['L1'][1])*self.scale
+        L2 = abs(yval['L2'][0]-yval['L2'][1])*self.scale
+        L3 = abs(yval['L3'][0]-yval['L3'][1])*self.scale
+
+        R1 = abs(yval['R1'][0]-yval['R1'][1])*self.scale
+        R2 = abs(yval['R2'][0]-yval['R2'][1])*self.scale
+        R3 = abs(yval['R3'][0]-yval['R3'][1])*self.scale
+        M1 = abs(max(yval['L1'])-min(yval['R1']))
+        M2 = abs(max(yval['L2'])-min(yval['R2']))
+        M3 = abs(max(yval['L3'])-min(yval['R3']))
+        print(f'{L1}, {L2}, {L3}, {M1}, {M2}, {M3}, {R1}, {R2}, {R3}')
+        with open('dimension_data.csv', 'a') as file:
+            file.write(f'{L1}, {L2}, {L3}, {M1}, {M2}, {M3}, {R1}, {R2}, {R3}')
+            file.write('\n')
+        self.image.set_data(self.imcontour)
+        self.canvas.draw()
+        
+    def go_home(self):
+        self.ax.relim()
+        self.ax.autoscale()
+        self.canvas.draw()
+        
     def calibrate(self):
         self.drawmode = 'calibrate'
         self.calpoint = []
@@ -161,10 +303,12 @@ class Make_Contours(tk.Frame):
         im_bw = cv2.cvtColor(self.im, cv2.COLOR_RGB2GRAY) #Needs to be converted to black and white
         ret, thresh = cv.threshold(im_bw, self.threshslider.get(),255,cv2.THRESH_BINARY)
         contours, heirarchy = cv.findContours(thresh, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-        contours = [i for i in contours if 500000 > cv.contourArea(i) and cv.contourArea(i)>2000]
+        contours = [i for i in contours if 500000 > cv.contourArea(i) and cv.contourArea(i)>60000]
 ##        cv2.imshow('image', self.image)
 ##        cv2.waitKey(0)
         for contour in contours:
+##            area = cv2.contourArea(contour)
+##            print(area)
             format_contour = []
             for i in contour:
                 (x,y) = i[0][0],i[0][1]
@@ -231,6 +375,9 @@ class Make_Contours(tk.Frame):
         self.coords = []
         try:
             self.index+=1
+            if self.index >= len(self.flist):
+                self.index-=1
+                return
 ##            file = self.flist[self.index]
         except:
             self.index -=1
@@ -275,6 +422,7 @@ class Make_Contours(tk.Frame):
             file = self.flist[self.index]
             self.im = cv.imread(file)
             self.image_name = os.path.split(file)[1].split('.')[0]
+            self.image_strvar.set(self.image_name)
             
         except IndexError as e:
             print(traceback.print_exc())
@@ -295,8 +443,9 @@ class Make_Contours(tk.Frame):
             except Exception as e:
                 print(traceback.format_exc())
         if self.display_distance == True:
+            
             d = ((self.mp[1][0]-self.mp[0][0])**2+(self.mp[0][1]-self.mp[1][1])**2)**1/2
-            d = round(d*self.scale,2)
+            d = round(d*self.scale,4)
             mx,my = ((self.mp[1][0]+self.mp[0][0])/2,(self.mp[0][1]+self.mp[1][1])/2)
             cv2.putText(self.imcontour,f'{d}',(int(mx-80), int(my-10)),cv2.FONT_HERSHEY_SIMPLEX, 1.85, (0,0,0), 2)
             print(mx,my)
@@ -366,8 +515,15 @@ class Make_Contours(tk.Frame):
                 self.mp.append((x,y))
             if len(self.mp) >= 2:
                 
-                self.display_distance = True
-                self.update_plot()
+##                self.display_distance = True
+##                self.update_plot()
+                d = ((self.mp[1][0]-self.mp[0][0])**2+(self.mp[0][1]-self.mp[1][1])**2)**1/2
+                d = round(d*self.scale,4)
+                mx,my=((self.mp[1][0]+self.mp[0][0])/2,(self.mp[0][1]+self.mp[1][1])/2)
+                cv2.putText(self.imcontour,f'{d}',(int(mx-80), int(my-10)),cv2.FONT_HERSHEY_SIMPLEX, 1.85, (0,255,255), 2)
+                cv2.line(self.imcontour, (self.mp[0][0], self.mp[0][1]), (self.mp[1][0], self.mp[1][1]), (0,0,255), 5)
+                self.image.set_data(self.imcontour)
+                self.canvas.draw()
                 self.mp = []
         if self.drawmode == 'calibrate':
             if event.xdata == None or event.ydata == None:
@@ -382,12 +538,14 @@ class Make_Contours(tk.Frame):
                 from tkinter.simpledialog import askstring
                 d = ((self.calpoint[1][0]-self.calpoint[0][0])**2+(self.calpoint[0][1]-self.calpoint[1][1])**2)**1/2
                 try:
-                    true_distance = int(askstring('Scale', 'What is the calibration scale?'))
+                    true_distance = float(askstring('Scale', 'What is the calibration scale?'))
+                    self.drawmode = None
                 except TypeError as e:
 ##                    tk.messagebox.showwarning("Warning","Invalid input")
                     self.calpoint=[]
                     return
                 self.scale = true_distance/d
+                print('scale:', self.scale)
                 
     def make_list(self):
         for f in ['Input','Database']:

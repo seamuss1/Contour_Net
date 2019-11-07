@@ -79,6 +79,7 @@ class Make_Contours(tk.Frame):
         measmenu.add_command(label="Distance", command=self.measure_distance)
         measmenu.add_command(label="Calibrate", command=self.calibrate)
         measmenu.add_command(label="Auto-Measure", command=self.auto_measure)
+        measmenu.add_command(label="Auto-Measure ALL", command=self.auto_measure_all)
         measmenu.add_separator()
         menubar.add_cascade(label="Measure", menu=measmenu)
 
@@ -149,20 +150,58 @@ class Make_Contours(tk.Frame):
 ##        self.generate_contours()
 ##        self.auto_measure()
 
+    def auto_measure_all(self):
+        for i in self.flist:
+            self.generate_contours()
+            self.auto_measure()
+            self.next_image()
+##            self.canvas.after(50)
+
+        
+        
     def auto_measure(self):
+        yval,xval = {},{}
+        self.scale=0.1383891502906172
+##        print('number of contours: ',len(self.coords))
+        contours = self.coords
+        if len(self.coords) == 3:
+            contours = []
+            isCell=False
+            for i in self.coords:
+                                
+                newavg = np.mean([f[0] for f in i])
+##                print('newavg',newavg)
+                
+                miny = max(i, key = lambda t: t[1])
+                minx = max(i, key = lambda t: t[0])
+                maxy = min(i, key = lambda t: t[1])
+                maxx = min(i, key = lambda t: t[0])
+
+                ytargets = {'1':miny[1]-85, '2':(miny[1]+maxy[1])/2, '3':maxy[1]+85}
+                for j in self.coords:
+                    if i == j:
+                        continue
+                    
+                    mindist = min(i, key = lambda t: t[0])[0] - max(j, key = lambda t: t[0])[0]
+                    mindist2 = min(j, key = lambda t: t[0])[0] - max(i, key = lambda t: t[0])[0]
+##                    print(mindist, mindist2)
+                    if abs(mindist)<80 or abs(mindist2)<80:
+                        isCell = True
+                        break
+                if isCell:
+                    contours.append(i)
+                    isCell = False
         average = []
-        for i in self.coords:
+        for i in contours:
             for c,p in enumerate(i):
                 average.append(p[0])
         average = np.mean(average)
-        yval,xval = {},{}
-        self.scale=0.1383891502906172
-        for i in self.coords:
+        for i in contours:
             
             
-            print('avg',average)
+##            print('avg',average)
             newavg = np.mean([f[0] for f in i])
-            print('newavg',newavg)
+##            print('newavg',newavg)
             if newavg > average:
                 side = 'R'
             if newavg<= average:
@@ -178,9 +217,9 @@ class Make_Contours(tk.Frame):
             ytargets = {'1':miny[1]-85, '2':(miny[1]+maxy[1])/2, '3':maxy[1]+85}
             xtargets = {'4':(minx[0]+maxx[0])/2}
             
-            print(ytargets)
+##            print(ytargets)
             target = miny[1]-85
-            print(target)
+##            print(target)
             check=False
             group = []
             
@@ -222,8 +261,11 @@ class Make_Contours(tk.Frame):
                                 xval[key][c].append(p[1])
                                 break
                             yavg = np.mean(xval[key][c])
-                            if yavg-15<y<yavg+15:      
-                                xval[key][c].append(p[1])
+                            if yavg-15<y<yavg+15:
+                                try:
+                                    xval[key][c].append(p[1])
+                                except AttributeError as e:
+                                    print(xval[key][c])
                                 break
                             
                             
@@ -239,14 +281,14 @@ class Make_Contours(tk.Frame):
                 yval[i][0] = np.mean(yval[i][0])
                 yval[i][1] = np.mean(yval[i][1])
             for key,val in xval.items():
-                print(val)
+##                print(val)
                 for c,group in enumerate(val):
                     xval[key][c] = np.mean(group)
-            print(yval)
-            print(xval)
+##            print(yval)
+##            print(xval)
                        
                 
-            print('minx:',minx,'miny:',miny,'maxx:',maxx,'maxy:',maxy)
+##            print('minx:',minx,'miny:',miny,'maxx:',maxx,'maxy:',maxy)
             new = (miny[0],miny[1]-85)
 
             
@@ -267,7 +309,7 @@ class Make_Contours(tk.Frame):
         M1 = abs(max(yval['L1'])-min(yval['R1']))
         M2 = abs(max(yval['L2'])-min(yval['R2']))
         M3 = abs(max(yval['L3'])-min(yval['R3']))
-        print(f'{L1}, {L2}, {L3}, {M1}, {M2}, {M3}, {R1}, {R2}, {R3}')
+##        print(f'{L1}, {L2}, {L3}, {M1}, {M2}, {M3}, {R1}, {R2}, {R3}')
         with open('dimension_data.csv', 'a') as file:
             file.write(f'{L1}, {L2}, {L3}, {M1}, {M2}, {M3}, {R1}, {R2}, {R3}')
             file.write('\n')
@@ -366,10 +408,10 @@ class Make_Contours(tk.Frame):
         self.update_plot()
             
     def next_image(self):
-        if self.coords != []:
-            MsgBox = tk.messagebox.askokcancel("Proceed?","The contours will be deleted")
-            if MsgBox == False:
-                return
+##        if self.coords != []:
+##            MsgBox = tk.messagebox.askokcancel("Proceed?","The contours will be deleted")
+##            if MsgBox == False:
+##                return
         self.coords_count = -1
         self.drawmode = None
         self.coords = []
@@ -384,10 +426,10 @@ class Make_Contours(tk.Frame):
         self.open_image()
         
     def prev_image(self):
-        if self.coords != []:
-            MsgBox = tk.messagebox.askokcancel("Proceed?","The contours will be deleted")
-            if MsgBox == False:
-                return
+##        if self.coords != []:
+##            MsgBox = tk.messagebox.askokcancel("Proceed?","The contours will be deleted")
+##            if MsgBox == False:
+##                return
         self.coords_count = -1
         self.drawmode = None
         self.coords = []

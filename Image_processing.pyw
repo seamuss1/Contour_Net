@@ -131,8 +131,8 @@ class Make_Contours(tk.Frame):
         self.threshslider.grid(row=0,column=6)
         blackbutton = tk.Button(self.frame4,text='New Contour',command=self.black_pixel)
         blackbutton.grid(column=3,row=1)
-##        undobutton = tk.Button(self.frame4,text='Undo',command=self.undo_draw)
-##        undobutton.grid(column=4,row=1)
+        undobutton = tk.Button(self.frame4,text='Detect Line',command=self.detect_line)
+        undobutton.grid(column=4,row=1)
         drawingexit = tk.Button(self.frame4,text='Pause',command=self.exit_drawing)
         drawingexit.grid(column=5,row=1)
         savedrawing = tk.Button(self.frame4,text='Save',command=self.save_contour)
@@ -149,11 +149,28 @@ class Make_Contours(tk.Frame):
         #Testing
 ##        self.generate_contours()
 ##        self.auto_measure()
+        
+    def detect_line(self):
+        img = 255 * np.ones(self.imcontour.shape, np.uint8)
+        for c,i in enumerate(self.coords):
+            points = np.array(i)
+            cv2.polylines(img,np.int32([points]),True,color=(0,0,255),thickness=2)
+        gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray,self.threshslider.get(),150,apertureSize = 3)
+        minLineLength = 100
+        maxLineGap = 10
+        lines = cv2.HoughLinesP(edges,1,np.pi/180,100,minLineLength,maxLineGap)
+        for line in lines:
+            for x1,y1,x2,y2 in line:
+                cv2.line(img,(x1,y1),(x2,y2),(0,255,0),2)
 
+        self.image.set_data(img)
+        self.canvas.draw()
     def auto_measure_all(self):
         with open('dimension_data.csv', 'w') as file:
             file.write('Image Name, L1, L2, L3, M1, M2, M3, R1, R2, R3\n')
         for i in self.flist:
+            self.fig.savefig(f'{self.image_name}1.png')
             self.generate_contours()
             self.auto_measure()
             self.next_image()
@@ -222,7 +239,7 @@ class Make_Contours(tk.Frame):
 ##            print(ytargets)
 ##            print(target)
             group = []
-            space = 30          
+            space = 40          
             
             for c,p in enumerate(i):
                 
@@ -265,7 +282,7 @@ class Make_Contours(tk.Frame):
                                 try:
                                     xval[key][c].append(p[1])
                                 except AttributeError as e:
-                                    print(xval[key][c])
+                                    print(traceback.print_exc())
                                 break
                             
                             
@@ -281,13 +298,18 @@ class Make_Contours(tk.Frame):
                 if i not in yval2:
                     yval2[i] = ['','']
                 yval2[i][0] = [np.mean([f[0] for f in yval[i][0]]),np.mean([f[1] for f in yval[i][0]])]
+                
                 yval2[i][1] = [np.mean([f[0] for f in yval[i][1]]),np.mean([f[1] for f in yval[i][1]])]
+                try:
+                    print(int(yval2[i][1][0]))
+                except:
+                    print(yval)
+
             for key,val in xval.items():
 ##                print(val)
                 for c,group in enumerate(val):
                     xval[key][c] = np.mean(group)
-##            print(yval)
-##            print(xval)
+
                        
                 
 ##            print('minx:',minx,'miny:',miny,'maxx:',maxx,'maxy:',maxy)
@@ -302,25 +324,29 @@ class Make_Contours(tk.Frame):
 ##            cv2.circle(self.imcontour,maxy,radius=6,thickness=6,color=(0,0,255))
 ##            cv2.circle(self.imcontour,p2,radius=6,thickness=6,color=(0,0,255))
         meas_lines = {}
-        L1 = abs(yval2['L1'][0][0]-yval2['L1'][1][0])*self.scale
-        meas_lines['L1'] = [(int(yval2['L1'][0][0]),int(yval2['L1'][0][1])),(int(yval2['L1'][1][0]),int(yval2['L1'][0][1]))]
-        L2 = abs(yval2['L2'][0][0]-yval2['L2'][1][0])*self.scale
-        meas_lines['L2'] = [(int(yval2['L2'][0][0]),int(yval2['L2'][0][1])),(int(yval2['L2'][1][0]),int(yval2['L2'][0][1]))]
-        L3 = abs(yval2['L3'][0][0]-yval2['L3'][1][0])*self.scale
-        meas_lines['L3'] = [(int(yval2['L3'][0][0]),int(yval2['L3'][0][1])),(int(yval2['L3'][1][0]),int(yval2['L3'][0][1]))]
-        R1 = abs(yval2['R1'][0][0]-yval2['R1'][1][0])*self.scale
-        meas_lines['R1'] = [(int(yval2['L1'][0][0]),int(yval2['L1'][0][1])),(int(yval2['R1'][1][0]),int(yval2['L1'][0][1]))]
-        R2 = abs(yval2['R2'][0][0]-yval2['R2'][1][0])*self.scale
-        meas_lines['R2'] = [(int(yval2['L2'][0][0]),int(yval2['L2'][0][1])),(int(yval2['R2'][1][0]),int(yval2['L2'][0][1]))]
-        R3 = abs(yval2['R3'][0][0]-yval2['R3'][1][0])*self.scale
-        meas_lines['R3'] = [(int(yval2['L3'][0][0]),int(yval2['L3'][0][1])),(int(yval2['R3'][1][0]),int(yval2['L3'][0][1]))]
-        M1 = abs(yval2['L1'][1][0]-yval2['R1'][0][0])*self.scale
-        meas_lines['M1'] = [(int(yval2['L1'][0][0]),int(yval2['L1'][0][1])),(int(yval2['R1'][1][0]),int(yval2['L1'][0][1]))]
-        M2 = abs(yval2['L1'][1][0]-yval2['R1'][0][0])*self.scale
-        meas_lines['M2'] = [(int(yval2['L2'][1][0]),int(yval2['L2'][0][1])),(int(yval2['R2'][0][0]),int(yval2['L2'][0][1]))]
-        M3 = abs(yval2['L1'][1][0]-yval2['R1'][0][0])*self.scale
-        meas_lines['M3'] = [(int(yval2['L3'][0][0]),int(yval2['L3'][0][1])),(int(yval2['R3'][1][0]),int(yval2['L3'][0][1]))]
-
+        self.image.set_data(self.imcontour)
+        self.canvas.draw()
+        try:
+            L1 = abs(yval2['L1'][0][0]-yval2['L1'][1][0])*self.scale
+            meas_lines['L1'] = [(int(yval2['L1'][0][0]),int(yval2['L1'][0][1])),(int(yval2['L1'][1][0]),int(yval2['L1'][0][1]))]
+            L2 = abs(yval2['L2'][0][0]-yval2['L2'][1][0])*self.scale
+            meas_lines['L2'] = [(int(yval2['L2'][0][0]),int(yval2['L2'][0][1])),(int(yval2['L2'][1][0]),int(yval2['L2'][0][1]))]
+            L3 = abs(yval2['L3'][0][0]-yval2['L3'][1][0])*self.scale
+            meas_lines['L3'] = [(int(yval2['L3'][0][0]),int(yval2['L3'][0][1])),(int(yval2['L3'][1][0]),int(yval2['L3'][0][1]))]
+            R1 = abs(yval2['R1'][0][0]-yval2['R1'][1][0])*self.scale
+            meas_lines['R1'] = [(int(yval2['L1'][0][0]),int(yval2['L1'][0][1])),(int(yval2['R1'][1][0]),int(yval2['L1'][0][1]))]
+            R2 = abs(yval2['R2'][0][0]-yval2['R2'][1][0])*self.scale
+            meas_lines['R2'] = [(int(yval2['L2'][0][0]),int(yval2['L2'][0][1])),(int(yval2['R2'][1][0]),int(yval2['L2'][0][1]))]
+            R3 = abs(yval2['R3'][0][0]-yval2['R3'][1][0])*self.scale
+            meas_lines['R3'] = [(int(yval2['L3'][0][0]),int(yval2['L3'][0][1])),(int(yval2['R3'][1][0]),int(yval2['L3'][0][1]))]
+            M1 = abs(yval2['L1'][0][0]-yval2['R1'][1][0])*self.scale
+            meas_lines['M1'] = [(int(yval2['L1'][0][0]),int(yval2['L1'][0][1])),(int(yval2['R1'][1][0]),int(yval2['L1'][0][1]))]
+            M2 = abs(yval2['L2'][0][0]-yval2['R2'][1][0])*self.scale
+            meas_lines['M2'] = [(int(yval2['L2'][1][0]),int(yval2['L2'][0][1])),(int(yval2['R2'][0][0]),int(yval2['L2'][0][1]))]
+            M3 = abs(yval2['L3'][0][0]-yval2['R3'][1][0])*self.scale
+            meas_lines['M3'] = [(int(yval2['L3'][0][0]),int(yval2['L3'][0][1])),(int(yval2['R3'][1][0]),int(yval2['L3'][0][1]))]
+        except ValueError as e:
+            print(e,'Value Error')
         
 ##        print(f'{L1}, {L2}, {L3}, {M1}, {M2}, {M3}, {R1}, {R2}, {R3}')
         with open('dimension_data.csv', 'a') as file:
@@ -331,6 +357,7 @@ class Make_Contours(tk.Frame):
             cv2.line(self.imcontour,line[0],line[1],color=(0,0,255),thickness=2)
         self.image.set_data(self.imcontour)
         self.canvas.draw()
+        self.fig.savefig(f'{self.image_name}2.png')
         
     def go_home(self):
         self.ax.relim()
@@ -494,7 +521,7 @@ class Make_Contours(tk.Frame):
         self.imcontour = np.copy(self.im)
         for c,i in enumerate(self.coords):
             points = np.array(i)
-            colr = (12,55,60)
+            colr = (0,255,0)
             if c == self.coords_count:
                 colr = (0,0,255)
             try:

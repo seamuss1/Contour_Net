@@ -389,7 +389,7 @@ class Make_Contours(tk.Frame):
         im_bw = cv2.cvtColor(self.im, cv2.COLOR_RGB2GRAY) #Needs to be converted to black and white
         ret, thresh = cv.threshold(im_bw, self.threshslider.get(),255,cv2.THRESH_BINARY)
         contours, heirarchy = cv.findContours(thresh, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-        contours = [i for i in contours if 500000 > cv.contourArea(i) and cv.contourArea(i)>60000]
+        contours = [i for i in contours if 50000000 > cv.contourArea(i) and cv.contourArea(i)>60000]
 ##        cv2.imshow('image', self.image)
 ##        cv2.waitKey(0)
         for contour in contours:
@@ -647,7 +647,7 @@ class Make_Contours(tk.Frame):
                     if not os.path.isfile(f):
                         self.dirs.append(folder+'/'+f)
             except:
-                if folder.endswith('.tif') or folder.endswith('.jpg'):
+                if folder.endswith('.tif') or folder.endswith('.jpg')or folder.endswith('.png'):
                     self.flist.append(folder)
         self.index=0
 

@@ -47,6 +47,7 @@ class Make_Contours(tk.Frame):
         
         menubar = tk.Menu(self.frame09)
         filemenu = tk.Menu(menubar, tearoff=0)
+        filemenu.add_command(label="Refresh", command=self.refresh_file)
         filemenu.add_command(label="Open", command=self.open_file)
         filemenu.add_command(label="Save", command=self.save_contour)
         filemenu.add_separator()
@@ -66,12 +67,17 @@ class Make_Contours(tk.Frame):
         drawmenu.add_command(label="Redo (shortcut=z)", command=self.redo_draw)
         drawmenu.add_command(label='Next Countour (Up)',command=self.next_con)
         drawmenu.add_command(label='Previous Countour (Down)',command=self.prev_con)
-        menubar.add_cascade(label="Draw", menu=drawmenu)
+        menubar.add_cascade(label="Edit", menu=drawmenu)
         parent.config(menu=menubar)
 
+        settingsmenu = tk.Menu(menubar, tearoff=0)
+        settingsmenu.add_separator()
+        menubar.add_cascade(label="settings", menu=settingsmenu)
+        parent.config(menu=menubar)
+
+        
         conmenu = tk.Menu(menubar, tearoff=0)
         conmenu.add_command(label="Generate Contours", command=self.generate_contours)
-        conmenu.add_separator()
         menubar.add_cascade(label="Generate Contours", menu=conmenu)
         parent.config(menu=menubar)
 
@@ -141,6 +147,7 @@ class Make_Contours(tk.Frame):
         tk.Button(self.frame4,text='Generate Contours',command=self.generate_contours).grid(column=8,row=1)
         tk.Button(self.frame4,text='Home',command=self.go_home).grid(column=9,row=1)
         tk.Button(self.frame4,text='Measure',command=self.auto_measure).grid(column=10,row=1)
+        tk.Button(self.frame4,text='Hammerhead',command=self.hammerhead).grid(column=11,row=1)
         self.coords = []
         self.redo = []
         self.make_list()
@@ -149,6 +156,37 @@ class Make_Contours(tk.Frame):
         #Testing
 ##        self.generate_contours()
 ##        self.auto_measure()
+        
+    def hammerhead(self):
+        self.generate_contours()
+##        print(len(self.coords))
+        for i in self.coords:
+            miny = max(i, key = lambda t: t[1])
+            minx = max(i, key = lambda t: t[0])
+            maxy = min(i, key = lambda t: t[1])
+            maxx = min(i, key = lambda t: t[0])
+            ni = np.array(i)
+            rect = cv.minAreaRect(ni)
+            ((cx,cy), (width, height), angle_rotation) = rect
+            box = cv.boxPoints(rect)
+            box = np.int0(box)
+            cv.drawContours(self.imcontour,[box],0,(0,0,255),2)            
+            ##Important fit line function
+##            [vx,vy,x,y] = cv2.fitLine(ni,cv2.DIST_L2,0,0.01,0.01)       
+##            print([vx,vy,x,y])
+##            cv2.line(self.imcontour,(self.imcontour.shape[1]-1,int(((self.imcontour.shape[1]-x)*vy/vx)+y)),(0,int((-x*vy/vx) + y)),255,2)
+            for c,j in enumerate(i):
+                if ((j[0]-i[c-1][0])**2+(j[1]-i[c-1][1])**2)**0.5 >10:
+                    print(c,j)
+                    print(((j[0]-i[c-1][0])**2+(j[1]-i[c-1][1])**2)**0.5)
+##        print('minx:',minx,'miny:',miny,'maxx:',maxx,'maxy:',maxy)
+        cv2.circle(self.imcontour,minx,radius=6,thickness=6,color=(0,0,255))
+        cv2.circle(self.imcontour,miny,radius=6,thickness=6,color=(0,0,255))
+        cv2.circle(self.imcontour,maxx,radius=6,thickness=6,color=(0,0,255))
+        cv2.circle(self.imcontour,maxy,radius=6,thickness=6,color=(0,0,255))
+        self.image.set_data(self.imcontour)
+        self.canvas.draw()
+##        self.update_plot()
         
     def detect_line(self):
         img = 255 * np.ones(self.imcontour.shape, np.uint8)
@@ -166,18 +204,17 @@ class Make_Contours(tk.Frame):
 
         self.image.set_data(img)
         self.canvas.draw()
+        
     def auto_measure_all(self):
         with open('dimension_data.csv', 'w') as file:
             file.write('Image Name, L1, L2, L3, M1, M2, M3, R1, R2, R3\n')
         for i in self.flist:
-            self.fig.savefig(f'{self.image_name}1.png')
+##            self.fig.savefig(f'{self.image_name}1.png')
             self.generate_contours()
             self.auto_measure()
             self.next_image()
 ##            self.canvas.after(50)
 
-        
-        
     def auto_measure(self):
         yval,xval = {},{}
         self.scale=5.952380952380952 #Microns/pixel for Zeiss V20 microscope
@@ -357,7 +394,7 @@ class Make_Contours(tk.Frame):
             cv2.line(self.imcontour,line[0],line[1],color=(0,0,255),thickness=2)
         self.image.set_data(self.imcontour)
         self.canvas.draw()
-        self.fig.savefig(f'{self.image_name}2.png')
+##        self.fig.savefig(f'{self.image_name}2.png')
         
     def go_home(self):
         self.ax.relim()
@@ -389,7 +426,7 @@ class Make_Contours(tk.Frame):
         im_bw = cv2.cvtColor(self.im, cv2.COLOR_RGB2GRAY) #Needs to be converted to black and white
         ret, thresh = cv.threshold(im_bw, self.threshslider.get(),255,cv2.THRESH_BINARY)
         contours, heirarchy = cv.findContours(thresh, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-        contours = [i for i in contours if 50000000 > cv.contourArea(i) and cv.contourArea(i)>60000]
+        contours = [i for i in contours if 500000 > cv.contourArea(i) and cv.contourArea(i)>60000]
 ##        cv2.imshow('image', self.image)
 ##        cv2.waitKey(0)
         for contour in contours:
@@ -507,8 +544,8 @@ class Make_Contours(tk.Frame):
         try:
             file = self.flist[self.index]
             self.im = cv.imread(file)
-            self.image_name = os.path.split(file)[1].split('.')[0]
-            self.image_strvar.set(self.image_name)
+            self.image_name = os.path.split(file)[1].split('.')[0]   #filename
+            self.image_strvar.set(file)
             
         except IndexError as e:
             print(traceback.print_exc())
@@ -634,13 +671,19 @@ class Make_Contours(tk.Frame):
                     return
                 self.scale = true_distance/d
                 print('scale:', self.scale)
-                
+    def refresh_file(self):
+        self.make_list()
+        self.open_image()
+        self.update_plot()
+
+        
     def make_list(self):
         for f in ['Input','Database']:
             if self.dirs==['Input',] and not os.path.isdir(f):
                 os.makedirs(f)
 
         self.flist = []
+        self.dirs=['Input']
         for folder in self.dirs:
             try:
                 for f in os.listdir(folder):

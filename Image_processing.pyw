@@ -27,6 +27,9 @@ class Make_Contours(tk.Frame):
         self.coords_count = -1
         self.coords = []
         self.display_distance = False
+        self.displayfocus = False
+        self.focus_pts = [(250,135),(1000,900)]
+        self.expected_cellsize = 200000
         self.scale = 1
         self.parent.bind('<Key>',self.key_bindings)
         s=ttk.Style()
@@ -84,6 +87,7 @@ class Make_Contours(tk.Frame):
         measmenu = tk.Menu(menubar, tearoff=0)
         measmenu.add_command(label="Distance", command=self.measure_distance)
         measmenu.add_command(label="Calibrate", command=self.calibrate)
+        measmenu.add_command(label="Show Focus Area", command=self.show_focus)
         measmenu.add_command(label="Auto-Measure", command=self.auto_measure)
         measmenu.add_command(label="Auto-Measure ALL", command=self.auto_measure_all)
         measmenu.add_separator()
@@ -131,10 +135,22 @@ class Make_Contours(tk.Frame):
         self.prev.grid(row=0,column=3)
         self.next = tk.Button(self.frame4,text='Next',command=self.next_image)
         self.next.grid(row=0,column=4)
-        tk.Label(self.frame4,text=' Thresh: ').grid(row=0,column=5)
+##        tk.Label(self.frame4,text=' Thresh: ').grid(row=0,column=5)
+
         self.threshslider = tk.Scale(self.frame4,label='Thresh',from_=0, to=255, orient=tk.HORIZONTAL, resolution=1)
         self.threshslider.set(100)
         self.threshslider.grid(row=0,column=6)
+        tk.Label(self.frame4,text=' Contour Area: ').grid(row=0,column=7)
+        self.low_area,self.high_area = tk.StringVar(),tk.StringVar()
+        self.low_area.set("30000")
+        self.area_spinbox1 = tk.Spinbox(self.frame4, from_=0.0, to=1e16,width=10, increment=100,textvariable=self.low_area)
+        self.area_spinbox1.grid(row=0, column=8)
+        tk.Label(self.frame4,text=' To: ').grid(row=0,column=9)
+        self.high_area.set("1500000")
+        self.area_spinbox2 = tk.Spinbox(self.frame4, from_=1.0, to=1e16,width=10, increment=1000,textvariable=self.high_area)
+        self.area_spinbox2.grid(row=0, column=10)
+        
+        
         blackbutton = tk.Button(self.frame4,text='New Contour',command=self.black_pixel)
         blackbutton.grid(column=3,row=1)
         undobutton = tk.Button(self.frame4,text='Detect Line',command=self.detect_line)
@@ -153,9 +169,15 @@ class Make_Contours(tk.Frame):
         self.make_list()
         self.open_image()
 
+
         #Testing
 ##        self.generate_contours()
 ##        self.auto_measure()
+
+    def show_focus(self):
+        self.displayfocus = True
+
+        self.update_plot()
         
     def hammerhead(self):
         self.generate_contours()
@@ -217,45 +239,41 @@ class Make_Contours(tk.Frame):
 
     def auto_measure(self):
         yval,xval = {},{}
-        self.scale=5.952380952380952 #Microns/pixel for Zeiss V20 microscope
+        self.scale=5.952380952380952 #Test Microns/pixel for Zeiss V20 microscope
 ##        print('number of contours: ',len(self.coords))
-        contours = self.coords
-        if len(self.coords) == 3:
-            contours = []
-            isCell=False
-            for i in self.coords:
-                                
-                newavg = np.mean([f[0] for f in i])
-##                print('newavg',newavg)
-                
-                miny = max(i, key = lambda t: t[1])
-                minx = max(i, key = lambda t: t[0])
-                maxy = min(i, key = lambda t: t[1])
-                maxx = min(i, key = lambda t: t[0])
 
-                ytargets = {'1':miny[1]-85, '2':(miny[1]+maxy[1])/2, '3':maxy[1]+85}
-                for j in self.coords:
-                    if i == j:
-                        continue
-                    
-                    mindist = min(i, key = lambda t: t[0])[0] - max(j, key = lambda t: t[0])[0]
-                    mindist2 = min(j, key = lambda t: t[0])[0] - max(i, key = lambda t: t[0])[0]
-##                    print(mindist, mindist2)
-                    if abs(mindist)<80 or abs(mindist2)<80:
-                        isCell = True
-                        break
-                if isCell:
-                    contours.append(i)
-                    isCell = False
+        contours = []
+        other_contours = []
+        for i in self.coords:
+            ni = np.array(i)
+            M = cv.moments(ni)
+            cx = int(M['m10']/M['m00'])
+            cy = int(M['m01']/M['m00'])
+            area = cv.contourArea(ni)
+            if self.focus_pts[0][0]<cx<self.focus_pts[1][0] and self.focus_pts[0][1]<cy<self.focus_pts[1][1]:
+                if area > self.expected_cellsize:
+                    other_contours.append(i)
+                    continue
+                contours.append(i)
+            else:
+                other_contours.append(i)
+##        print(len(other_contours))
         average = []
         for i in contours:
             for c,p in enumerate(i):
                 average.append(p[0])
         average = np.mean(average)
+
         for i in contours:
-            
-            
-##            print('avg',average)
+            M = cv.moments(np.array(i))
+            cx = int(M['m10']/M['m00'])
+            cy = int(M['m01']/M['m00'])
+            cv2.circle(self.imcontour,(cx,cy),radius=6,thickness=6,color=(255,0,255))
+            ni = np.array(i)
+            rect = cv.minAreaRect(ni)
+            #Angle_rotation starts at -90, and increases up to 0 as it's rotated clockwise
+            ((cx,cy), (width, height), angle_rotation) = rect
+##            print('avg',average, 'angle: ', angle_rotation)
             newavg = np.mean([f[0] for f in i])
 ##            print('newavg',newavg)
             if newavg > average:
@@ -279,48 +297,57 @@ class Make_Contours(tk.Frame):
             space = 40          
             
             for c,p in enumerate(i):
-                
+                try:
+                    p2 = i[c+1]
+                except IndexError:
+                    p2 = i[-1]
                 x,y = p
-                
-                for name,target in ytargets.items():
-                    if target-space< y <target+space:
-                        
-                        key = side+name
-##                        print(name, p)
-                        
-                        if key not in yval:
-                            yval[key]=[[],[]]
-                            yval[key][0].append(p)
-                        xavg = np.mean([f[0] for f in yval[key][0]])
+                x2,y2 = p2
+##                print(x,y,x2,y2)
+##                slope = (y2-y)/(x2-x+0.0001)
+                dist =  ((x-x2)**2+(y-y2)**2)**0.5
+##                print('y =', slope,'x +',dist)
+                for x,y in zip(np.linspace(x,x2,int(dist)),np.linspace(y,y2,int(dist))):
+##                    print(x,y)
+                    for name,target in ytargets.items():
+                        if target-space< y <target+space:
                             
+                            key = side+name
+    ##                        print(name, p)
                             
+                            if key not in yval:
+                                yval[key]=[[],[]]
+                                yval[key][0].append(p)
+                            xavg = np.mean([f[0] for f in yval[key][0]])
+                                
+                                
 
-                        if xavg-space<x<xavg+space:      
-                            yval[key][0].append(p)
-                        if xavg-space>x or x>xavg+space:
-                            yval[key][1].append(p)
-                        
-##                        cv2.circle(self.imcontour,(x,y),radius=6,thickness=6,color=(0,0,255))
-                for name,target in xtargets.items():
-                    if target-space< x <target+space:
-##                        print(x,(minx[0]+maxx[0])/2)
-                        key = side+name
-                        if key not in xval:
-                            xval[key]=[[],[],[],[]]
-                            xval[key][0].append(p[1])
-                        
-                        
-                        for c, group in enumerate(xval[key]):
-                            if xval[key][c] == []:
-                                xval[key][c].append(p[1])
-                                break
-                            yavg = np.mean(xval[key][c])
-                            if yavg-space<y<yavg+space:
-                                try:
+                            if xavg-space<x<xavg+space:      
+                                yval[key][0].append(p)
+                            if xavg-space>x or x>xavg+space:
+                                yval[key][1].append(p)
+                            
+    ##                        cv2.circle(self.imcontour,(x,y),radius=6,thickness=6,color=(0,0,255))
+                    for name,target in xtargets.items():
+                        if target-space< x <target+space:
+    ##                        print(x,(minx[0]+maxx[0])/2)
+                            key = side+name
+                            if key not in xval:
+                                xval[key]=[[],[],[],[]]
+                                xval[key][0].append(p[1])
+                            
+                            
+                            for c, group in enumerate(xval[key]):
+                                if xval[key][c] == []:
                                     xval[key][c].append(p[1])
-                                except AttributeError as e:
-                                    print(traceback.print_exc())
-                                break
+                                    break
+                                yavg = np.mean(xval[key][c])
+                                if yavg-space<y<yavg+space:
+                                    try:
+                                        xval[key][c].append(p[1])
+                                    except AttributeError as e:
+                                        print(traceback.print_exc())
+                                    break
                             
                             
 
@@ -337,10 +364,10 @@ class Make_Contours(tk.Frame):
                 yval2[i][0] = [np.mean([f[0] for f in yval[i][0]]),np.mean([f[1] for f in yval[i][0]])]
                 
                 yval2[i][1] = [np.mean([f[0] for f in yval[i][1]]),np.mean([f[1] for f in yval[i][1]])]
-                try:
-                    print(int(yval2[i][1][0]))
-                except:
-                    print(yval)
+##                try:
+##                    print(int(yval2[i][1][0]))
+##                except:
+##                    print(yval)
 
             for key,val in xval.items():
 ##                print(val)
@@ -426,7 +453,7 @@ class Make_Contours(tk.Frame):
         im_bw = cv2.cvtColor(self.im, cv2.COLOR_RGB2GRAY) #Needs to be converted to black and white
         ret, thresh = cv.threshold(im_bw, self.threshslider.get(),255,cv2.THRESH_BINARY)
         contours, heirarchy = cv.findContours(thresh, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-        contours = [i for i in contours if 500000 > cv.contourArea(i) and cv.contourArea(i)>60000]
+        contours = [i for i in contours if int(self.high_area.get()) > cv.contourArea(i) and cv.contourArea(i)>int(self.low_area.get())]
 ##        cv2.imshow('image', self.image)
 ##        cv2.waitKey(0)
         for contour in contours:
@@ -575,6 +602,8 @@ class Make_Contours(tk.Frame):
 ##            print('distance: ', d)
 ##            cv2.line(self.imcontour, (self.mp[0][0], self.mp[0][1]), (self.mp[1][0], self.mp[1][1]), (0,0,255), 5)
 ##            self.display_distance = False
+        if self.displayfocus == True:
+            cv2.rectangle(self.imcontour, self.focus_pts[0], self.focus_pts[1],(86,35,211),2)
         self.imcontour = cv2.cvtColor(self.imcontour, cv2.COLOR_BGR2RGB)
         self.image.set_data(self.imcontour)
         self.canvas.draw()
@@ -618,7 +647,7 @@ class Make_Contours(tk.Frame):
             x = int(round(x*(width/self.ymax)))
             y = int(round(y*(height/self.xmax)))
             
-##            print("clicked at", event.xdata, event.ydata,round(event.xdata))
+            print("clicked at",round(x),round(y))
 ##            print(x,y)
             try:
                 self.coords[self.coords_count].append((x,y))
@@ -697,6 +726,7 @@ class Make_Contours(tk.Frame):
 
 if __name__ == '__main__':
     root = tk.Tk()
+    root.iconbitmap('resources/uml_logo.ico')
     root.protocol('WM_DELETE_WINDOW', exit)
     app = Make_Contours(root)
     root.mainloop()

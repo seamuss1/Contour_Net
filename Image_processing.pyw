@@ -11,7 +11,8 @@ matplotlib.use("TkAgg")
 from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationToolbar2Tk)
 from matplotlib.backend_bases import key_press_handler
 import pickle
-
+from sklearn import linear_model
+from sklearn.metrics import mean_squared_error, r2_score
 
 
 
@@ -171,8 +172,8 @@ class Make_Contours(tk.Frame):
 
 
         #Testing
-##        self.generate_contours()
-##        self.auto_measure()
+        self.generate_contours()
+        self.auto_measure()
 
     def show_focus(self):
         self.displayfocus = True
@@ -197,10 +198,10 @@ class Make_Contours(tk.Frame):
 ##            [vx,vy,x,y] = cv2.fitLine(ni,cv2.DIST_L2,0,0.01,0.01)       
 ##            print([vx,vy,x,y])
 ##            cv2.line(self.imcontour,(self.imcontour.shape[1]-1,int(((self.imcontour.shape[1]-x)*vy/vx)+y)),(0,int((-x*vy/vx) + y)),255,2)
-            for c,j in enumerate(i):
-                if ((j[0]-i[c-1][0])**2+(j[1]-i[c-1][1])**2)**0.5 >10:
-                    print(c,j)
-                    print(((j[0]-i[c-1][0])**2+(j[1]-i[c-1][1])**2)**0.5)
+##            for c,j in enumerate(i):
+##                if ((j[0]-i[c-1][0])**2+(j[1]-i[c-1][1])**2)**0.5 >10:
+##                    print(c,j)
+##                    print(((j[0]-i[c-1][0])**2+(j[1]-i[c-1][1])**2)**0.5)
 ##        print('minx:',minx,'miny:',miny,'maxx:',maxx,'maxy:',maxy)
         cv2.circle(self.imcontour,minx,radius=6,thickness=6,color=(0,0,255))
         cv2.circle(self.imcontour,miny,radius=6,thickness=6,color=(0,0,255))
@@ -238,7 +239,9 @@ class Make_Contours(tk.Frame):
 ##            self.canvas.after(50)
 
     def auto_measure(self):
-        yval,xval = {},{}
+        yval,horzlines = {},{}
+        horzlines, vertlines = {},{}
+        horzlines2, vertlines2 = {},{}
         self.scale=5.952380952380952 #Test Microns/pixel for Zeiss V20 microscope
 ##        print('number of contours: ',len(self.coords))
 
@@ -263,7 +266,8 @@ class Make_Contours(tk.Frame):
             for c,p in enumerate(i):
                 average.append(p[0])
         average = np.mean(average)
-
+        
+        
         for i in contours:
             M = cv.moments(np.array(i))
             cx = int(M['m10']/M['m00'])
@@ -287,9 +291,9 @@ class Make_Contours(tk.Frame):
             minx = max(i, key = lambda t: t[0])
             maxy = min(i, key = lambda t: t[1])
             maxx = min(i, key = lambda t: t[0])
-
             ytargets = {'1':miny[1]-85, '2':(miny[1]+maxy[1])/2, '3':maxy[1]+85}
             xtargets = {'4':(minx[0]+maxx[0])/2}
+            
             
 ##            print(ytargets)
 ##            print(target)
@@ -303,11 +307,10 @@ class Make_Contours(tk.Frame):
                     p2 = i[-1]
                 x,y = p
                 x2,y2 = p2
-##                print(x,y,x2,y2)
-##                slope = (y2-y)/(x2-x+0.0001)
                 dist =  ((x-x2)**2+(y-y2)**2)**0.5
-##                print('y =', slope,'x +',dist)
+                #important loop because find_contour only generates nodes, points along a straight line are not included
                 for x,y in zip(np.linspace(x,x2,int(dist)),np.linspace(y,y2,int(dist))):
+                    x,y = int(x),int(y)
 ##                    print(x,y)
                     for name,target in ytargets.items():
                         if target-space< y <target+space:
@@ -318,45 +321,146 @@ class Make_Contours(tk.Frame):
                             if key not in yval:
                                 yval[key]=[[],[]]
                                 yval[key][0].append(p)
+
+                            if key not in vertlines:
+                                vertlines[key]= [[[],[]],[[],[]]]
                             xavg = np.mean([f[0] for f in yval[key][0]])
                                 
                                 
-
+##                            horzlines[key][0].append(x)
+##                            horzlines[key][1].append(y)
+                            
                             if xavg-space<x<xavg+space:      
                                 yval[key][0].append(p)
+                                vertlines[key][0][0].append(x)
+                                vertlines[key][0][1].append(y)
                             if xavg-space>x or x>xavg+space:
                                 yval[key][1].append(p)
+                                vertlines[key][1][0].append(x)
+                                vertlines[key][1][1].append(y)
                             
-    ##                        cv2.circle(self.imcontour,(x,y),radius=6,thickness=6,color=(0,0,255))
+                            cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
                     for name,target in xtargets.items():
                         if target-space< x <target+space:
     ##                        print(x,(minx[0]+maxx[0])/2)
                             key = side+name
-                            if key not in xval:
-                                xval[key]=[[],[],[],[]]
-                                xval[key][0].append(p[1])
+                            if key not in horzlines:
+                                horzlines[key]=[[],[],[],[]]
+                                horzlines[key][0].append(p[1])
                             
-                            
-                            for c, group in enumerate(xval[key]):
-                                if xval[key][c] == []:
-                                    xval[key][c].append(p[1])
+                            cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
+                            for c, group in enumerate(horzlines[key]):
+                                if horzlines[key][c] == []:
+                                    horzlines[key][c].append(p[1])
                                     break
-                                yavg = np.mean(xval[key][c])
+                                yavg = np.mean(horzlines[key][c])
                                 if yavg-space<y<yavg+space:
                                     try:
-                                        xval[key][c].append(p[1])
+                                        horzlines[key][c].append(p[1])
                                     except AttributeError as e:
                                         print(traceback.print_exc())
                                     break
-                            
-                            
+                                
+            for other_contour in other_contours:
+                for c,po in enumerate(other_contour):
+                    try:
+                        po2 = other_contour[c+1]
+                    except IndexError:
+                        po2 = other_contour[-1]
+                    x,y = po
+                    x2,y2 = po2
+                    dist =  ((x-x2)**2+(y-y2)**2)**0.5
+                    for x,y in zip(np.linspace(x,x2,int(dist)),np.linspace(y,y2,int(dist))):
+                        x,y = int(x),int(y)
+                        for name,target in ytargets.items():
+                            if target-space< y <target+space:
+                                if side=='L':
+                                    sideval=min([np.mean([f[0][0] for f in vertlines['L'+name]]),np.mean([f[1][0] for f in vertlines['L'+name]])])
+                                    if x<=sideval:
+                                        if x<=10:
+                                            #Checks that the contour is not the edge of the image
+                                            continue
+                                        key = 'LG'+name
+                                        if key not in vertlines2:
+                                            vertlines2[key] = [[],[]]
+                                            vertlines2[key][0].append(x)
+                                            vertlines2[key][1].append(y)
+                                        avg2 = np.mean([f for f in vertlines2[key][0]])
+                                        if x<avg2-space:
+                                            vertlines2[key] = [[],[]]
+                                            vertlines2[key][0].append(x)
+                                            vertlines2[key][1].append(y)
+                                        avg2 = np.mean([f for f in vertlines2[key][0]])
+                                        if x>avg2+space:
+                                            continue
+                                        vertlines2[key][0].append(x)
+                                        vertlines2[key][1].append(y)
+##                                        cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
+                                if side=='R':
+                                    sideval=max([np.mean([f[0][1] for f in vertlines['R'+name]]),np.mean([f[1][1] for f in vertlines['R'+name]])])
+                                    if x>=sideval:
+                                        if x>=self.imcontour.shape[1]-10:
+                                            continue
+                                        key = 'RG'+name
+                                        if key not in vertlines2:
+                                            vertlines2[key] = [[],[]]
+                                            vertlines2[key][0].append(x)
+                                            vertlines2[key][1].append(y)
+                                        avg2 = np.mean([f for f in vertlines2[key][0]])
+                                        if x<avg2-space:
+                                            vertlines2[key] = [[],[]]
+                                            vertlines2[key][0].append(x)
+                                            vertlines2[key][1].append(y)
+                                        avg2 = np.mean([f for f in vertlines2[key][0]])
+                                        if x>avg2+space:
+                                            continue
+                                        vertlines2[key][0].append(x)
+                                        vertlines2[key][1].append(y)
 
-##                        if yavg-15<y<yavg+15:      
-##                            xval[key][0].append(p[1])
-##                        if yavg-15>y or y>yavg+15:
-##                            xval[key][1].append(p[1])
-                        
-##                        cv2.circle(self.imcontour,(x,y),radius=6,thickness=6,color=(0,0,255))
+                        for name,target in xtargets.items():
+                            if target-space< x <target+space:
+                                if side=='L':
+                                    if y<=maxy[1]:
+                                        if y<=10:
+                                            continue
+                                        key = 'LT'
+                                        if key not in horzlines2:
+                                            horzlines2[key] = [[],[]]
+                                            horzlines2[key][0].append(x)
+                                            horzlines2[key][1].append(y)
+                                        cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
+                                    if y>=miny[1]:
+                                        if y>=self.imcontour.shape[1]-10:
+                                            continue
+                                        key = 'LB'
+                                        if key not in horzlines2:
+                                            horzlines2[key] = [[],[]]
+                                            horzlines2[key][0].append(x)
+                                            horzlines2[key][1].append(y)
+                                        cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
+                                if side=='R':
+                                    if y<=maxy[1]:
+                                        if y<=10:
+                                            continue
+                                        key = 'RT'
+                                        if key not in horzlines2:
+                                            horzlines2[key] = [[],[]]
+                                            horzlines2[key][0].append(x)
+                                            horzlines2[key][1].append(y)
+                                        cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
+                                    if y>=miny[1]:
+                                        if y>=self.imcontour.shape[1]-10:
+                                            continue
+                                        key = 'RB'
+                                        if key not in horzlines2:
+                                            horzlines2[key] = [[],[]]
+                                            horzlines2[key][0].append(x)
+                                            horzlines2[key][1].append(y)
+                                        cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
+            for key,p in vertlines2.items():
+                for x,y in zip(p[0],p[1]):
+                    cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
+                    
             yval2 = {}
             for i in yval:
                 if i not in yval2:
@@ -368,11 +472,10 @@ class Make_Contours(tk.Frame):
 ##                    print(int(yval2[i][1][0]))
 ##                except:
 ##                    print(yval)
-
-            for key,val in xval.items():
+            for key,val in horzlines.items():
 ##                print(val)
                 for c,group in enumerate(val):
-                    xval[key][c] = np.mean(group)
+                    val[c] = np.mean(group)
 
                        
                 
@@ -387,6 +490,32 @@ class Make_Contours(tk.Frame):
 ##            cv2.circle(self.imcontour,maxx,radius=6,thickness=6,color=(0,0,255))
 ##            cv2.circle(self.imcontour,maxy,radius=6,thickness=6,color=(0,0,255))
 ##            cv2.circle(self.imcontour,p2,radius=6,thickness=6,color=(0,0,255))
+##        for key,([x3,y3],[x1,y1]) in vertlines.items():
+##            for x,y in ([x3,y3],[x1,y1]):
+##                x = np.array(x).reshape(-1, 1)
+##                y = np.array(y).reshape(-1, 1)
+##                x1= np.array(x1).reshape(-1, 1)
+##                y1 = np.array(y1).reshape(-1, 1)
+##                regr = linear_model.LinearRegression()
+##                regr.fit(x,y)
+##                y_pred = regr.predict(x)
+##    ##            print(y_pred)
+##    ##            print(y)
+##                coef,inter = regr.coef_, regr.intercept_
+##                print(key)
+##                print('Coefficients: ', coef,inter)
+##                print('Mean squared error: %.2f'% mean_squared_error(y, y_pred))
+##                print('Coefficient of determination: %.2f'% r2_score(y, y_pred))
+##                pf1 = (0,inter)
+##                pf2 = (10000,inter+10000*coef)
+##                cv2.line(self.imcontour, pf1,pf2, (0,0,255), 2)
+##                print((x[0],y_pred[0]),(x[-1],y_pred[-1]))
+##                cv2.line(self.imcontour, (int(min(x)),int(min(y_pred))),(int(max(x)),int(max(y_pred))), (0,0,255), 5)
+##            for w,z,z_pred in zip(x,y,y_pred):
+##                cv2.circle(self.imcontour,(w,z_pred),radius=3,thickness=2,color=(0,0,255))
+##                self.image.set_data(self.imcontour)
+##                self.canvas.draw()
+        
         meas_lines = {}
         self.image.set_data(self.imcontour)
         self.canvas.draw()

@@ -242,6 +242,9 @@ class Make_Contours(tk.Frame):
         yval,horzlines = {},{}
         horzlines, vertlines = {},{}
         horzlines2, vertlines2 = {},{}
+        avg_horzlines, avg_vertlines = {},{}
+        avg_horzlines2, avg_vertlines2 = {},{}
+        
         self.scale=5.952380952380952 #Test Microns/pixel for Zeiss V20 microscope
 ##        print('number of contours: ',len(self.coords))
 
@@ -272,21 +275,20 @@ class Make_Contours(tk.Frame):
             M = cv.moments(np.array(i))
             cx = int(M['m10']/M['m00'])
             cy = int(M['m01']/M['m00'])
-            cv2.circle(self.imcontour,(cx,cy),radius=6,thickness=6,color=(255,0,255))
+##            cv2.circle(self.imcontour,(cx,cy),radius=6,thickness=6,color=(255,0,255))
             ni = np.array(i)
             rect = cv.minAreaRect(ni)
             #Angle_rotation starts at -90, and increases up to 0 as it's rotated clockwise
             ((cx,cy), (width, height), angle_rotation) = rect
 ##            print('avg',average, 'angle: ', angle_rotation)
+            
             newavg = np.mean([f[0] for f in i])
 ##            print('newavg',newavg)
             if newavg > average:
                 side = 'R'
             if newavg<= average:
                 side='L'
-            data = np.array(i)
-            sortIndices = np.argsort(data[:,1])
-                        
+                                    
             miny = max(i, key = lambda t: t[1])
             minx = max(i, key = lambda t: t[0])
             maxy = min(i, key = lambda t: t[1])
@@ -307,12 +309,16 @@ class Make_Contours(tk.Frame):
                     p2 = i[-1]
                 x,y = p
                 x2,y2 = p2
+                
                 dist =  ((x-x2)**2+(y-y2)**2)**0.5
                 #important loop because find_contour only generates nodes, points along a straight line are not included
+                
                 for x,y in zip(np.linspace(x,x2,int(dist)),np.linspace(y,y2,int(dist))):
+                    
                     x,y = int(x),int(y)
 ##                    print(x,y)
                     for name,target in ytargets.items():
+                        
                         if target-space< y <target+space:
                             
                             key = side+name
@@ -324,6 +330,7 @@ class Make_Contours(tk.Frame):
 
                             if key not in vertlines:
                                 vertlines[key]= [[[],[]],[[],[]]]
+                            
                             xavg = np.mean([f[0] for f in yval[key][0]])
                                 
                                 
@@ -340,27 +347,37 @@ class Make_Contours(tk.Frame):
                                 vertlines[key][1][1].append(y)
                             
                             cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
+                    
                     for name,target in xtargets.items():
                         if target-space< x <target+space:
     ##                        print(x,(minx[0]+maxx[0])/2)
                             key = side+name
                             if key not in horzlines:
-                                horzlines[key]=[[],[],[],[]]
-                                horzlines[key][0].append(p[1])
+                                horzlines[key]=[[[],[]],[[],[]],[[],[]],[[],[]]]
+                                horzlines[key][0][0].append(x)
+                                horzlines[key][0][1].append(y)
                             
                             cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
                             for c, group in enumerate(horzlines[key]):
-                                if horzlines[key][c] == []:
-                                    horzlines[key][c].append(p[1])
+                                if horzlines[key][c] == [[],[]]:
+                                    horzlines[key][c][0].append(x)
+                                    horzlines[key][c][1].append(y)
                                     break
-                                yavg = np.mean(horzlines[key][c])
+##                                print(horzlines[key][c])
+##                                print(horzlines[key][c][1])
+                                yavg = np.mean(horzlines[key][c][1])
                                 if yavg-space<y<yavg+space:
-                                    try:
-                                        horzlines[key][c].append(p[1])
-                                    except AttributeError as e:
-                                        print(traceback.print_exc())
+                                    horzlines[key][c][0].append(x)
+                                    horzlines[key][c][1].append(y)
                                     break
-                                
+##                                if not yavg-space<y<yavg+space:
+##                                    try:
+##                                        horzlines[key][c+1][0].append(x)
+##                                        horzlines[key][c+1][1].append(y)
+##                                    except AttributeError as e:
+##                                        print(traceback.print_exc())
+##                                    break
+            
             for other_contour in other_contours:
                 for c,po in enumerate(other_contour):
                     try:
@@ -390,6 +407,7 @@ class Make_Contours(tk.Frame):
                                             vertlines2[key] = [[],[]]
                                             vertlines2[key][0].append(x)
                                             vertlines2[key][1].append(y)
+                                            print('test')
                                         avg2 = np.mean([f for f in vertlines2[key][0]])
                                         if x>avg2+space:
                                             continue
@@ -422,10 +440,14 @@ class Make_Contours(tk.Frame):
                                 if side=='L':
                                     if y<=maxy[1]:
                                         if y<=10:
+                                            
                                             continue
                                         key = 'LT'
                                         if key not in horzlines2:
                                             horzlines2[key] = [[],[]]
+                                            horzlines2[key][0].append(x)
+                                            horzlines2[key][1].append(y)
+                                        if key in horzlines2:
                                             horzlines2[key][0].append(x)
                                             horzlines2[key][1].append(y)
                                         cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
@@ -435,6 +457,9 @@ class Make_Contours(tk.Frame):
                                         key = 'LB'
                                         if key not in horzlines2:
                                             horzlines2[key] = [[],[]]
+                                            horzlines2[key][0].append(x)
+                                            horzlines2[key][1].append(y)
+                                        if key in horzlines2:
                                             horzlines2[key][0].append(x)
                                             horzlines2[key][1].append(y)
                                         cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
@@ -447,6 +472,9 @@ class Make_Contours(tk.Frame):
                                             horzlines2[key] = [[],[]]
                                             horzlines2[key][0].append(x)
                                             horzlines2[key][1].append(y)
+                                        if key in horzlines2:
+                                            horzlines2[key][0].append(x)
+                                            horzlines2[key][1].append(y)
                                         cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
                                     if y>=miny[1]:
                                         if y>=self.imcontour.shape[1]-10:
@@ -456,11 +484,13 @@ class Make_Contours(tk.Frame):
                                             horzlines2[key] = [[],[]]
                                             horzlines2[key][0].append(x)
                                             horzlines2[key][1].append(y)
+                                        if key in horzlines2:
+                                            horzlines2[key][0].append(x)
+                                            horzlines2[key][1].append(y)
                                         cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
             for key,p in vertlines2.items():
                 for x,y in zip(p[0],p[1]):
                     cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
-                    
             yval2 = {}
             for i in yval:
                 if i not in yval2:
@@ -472,12 +502,8 @@ class Make_Contours(tk.Frame):
 ##                    print(int(yval2[i][1][0]))
 ##                except:
 ##                    print(yval)
-            for key,val in horzlines.items():
-##                print(val)
-                for c,group in enumerate(val):
-                    val[c] = np.mean(group)
-
-                       
+            
+            
                 
 ##            print('minx:',minx,'miny:',miny,'maxx:',maxx,'maxy:',maxy)
             new = (miny[0],miny[1]-85)
@@ -515,39 +541,99 @@ class Make_Contours(tk.Frame):
 ##                cv2.circle(self.imcontour,(w,z_pred),radius=3,thickness=2,color=(0,0,255))
 ##                self.image.set_data(self.imcontour)
 ##                self.canvas.draw()
+        for key,val in vertlines2.items():
+            print('vertlines2',key)
+            x = np.mean([f for f in val[0]])
+            y = np.mean([f for f in val[1]])
+            avg_vertlines2[key]=[x,y]
+        for key,val in vertlines.items():
+            print('vertlines',key)
+            x1 = np.mean(val[0][0])
+            y1 = np.mean(val[0][1])
+            x2 = np.mean(val[1][0])
+            y2 = np.mean(val[1][1])
+            avg_vertlines[key] = [[x1,y1],[x2,y2]]
+            avg_vertlines[key] = sorted(avg_vertlines[key],key=lambda k: [k[0], k[1]])
+        for key,val in horzlines2.items():
+            print('horzlines2',key)
+            x = np.mean([f for f in val[0]])
+            y = np.mean([f for f in val[1]])
+            avg_horzlines2[key]=[x,y]
+        for key,val in horzlines.items():
+            print('horzlines',key)
+            avg_horzlines[key] = []
+            for c,group in enumerate(val):
+                x = np.mean(val[c][0])
+                y = np.mean(val[c][1])
+                avg_horzlines[key].append([x,y])
+            avg_horzlines[key] = sorted(avg_horzlines[key],key=lambda k: [k[1], k[0]])
         
         meas_lines = {}
         self.image.set_data(self.imcontour)
         self.canvas.draw()
-        try:
-            L1 = abs(yval2['L1'][0][0]-yval2['L1'][1][0])*self.scale
-            meas_lines['L1'] = [(int(yval2['L1'][0][0]),int(yval2['L1'][0][1])),(int(yval2['L1'][1][0]),int(yval2['L1'][0][1]))]
-            L2 = abs(yval2['L2'][0][0]-yval2['L2'][1][0])*self.scale
-            meas_lines['L2'] = [(int(yval2['L2'][0][0]),int(yval2['L2'][0][1])),(int(yval2['L2'][1][0]),int(yval2['L2'][0][1]))]
-            L3 = abs(yval2['L3'][0][0]-yval2['L3'][1][0])*self.scale
-            meas_lines['L3'] = [(int(yval2['L3'][0][0]),int(yval2['L3'][0][1])),(int(yval2['L3'][1][0]),int(yval2['L3'][0][1]))]
-            R1 = abs(yval2['R1'][0][0]-yval2['R1'][1][0])*self.scale
-            meas_lines['R1'] = [(int(yval2['L1'][0][0]),int(yval2['L1'][0][1])),(int(yval2['R1'][1][0]),int(yval2['L1'][0][1]))]
-            R2 = abs(yval2['R2'][0][0]-yval2['R2'][1][0])*self.scale
-            meas_lines['R2'] = [(int(yval2['L2'][0][0]),int(yval2['L2'][0][1])),(int(yval2['R2'][1][0]),int(yval2['L2'][0][1]))]
-            R3 = abs(yval2['R3'][0][0]-yval2['R3'][1][0])*self.scale
-            meas_lines['R3'] = [(int(yval2['L3'][0][0]),int(yval2['L3'][0][1])),(int(yval2['R3'][1][0]),int(yval2['L3'][0][1]))]
-            M1 = abs(yval2['L1'][0][0]-yval2['R1'][1][0])*self.scale
-            meas_lines['M1'] = [(int(yval2['L1'][0][0]),int(yval2['L1'][0][1])),(int(yval2['R1'][1][0]),int(yval2['L1'][0][1]))]
-            M2 = abs(yval2['L2'][0][0]-yval2['R2'][1][0])*self.scale
-            meas_lines['M2'] = [(int(yval2['L2'][1][0]),int(yval2['L2'][0][1])),(int(yval2['R2'][0][0]),int(yval2['L2'][0][1]))]
-            M3 = abs(yval2['L3'][0][0]-yval2['R3'][1][0])*self.scale
-            meas_lines['M3'] = [(int(yval2['L3'][0][0]),int(yval2['L3'][0][1])),(int(yval2['R3'][1][0]),int(yval2['L3'][0][1]))]
-        except ValueError as e:
-            print(e,'Value Error')
+##        try:
+##            L1 = abs(yval2['L1'][0][0]-yval2['L1'][1][0])*self.scale
+##            meas_lines['L1'] = [(int(yval2['L1'][0][0]),int(yval2['L1'][0][1])),(int(yval2['L1'][1][0]),int(yval2['L1'][0][1]))]
+##            L2 = abs(yval2['L2'][0][0]-yval2['L2'][1][0])*self.scale
+##            meas_lines['L2'] = [(int(yval2['L2'][0][0]),int(yval2['L2'][0][1])),(int(yval2['L2'][1][0]),int(yval2['L2'][0][1]))]
+##            L3 = abs(yval2['L3'][0][0]-yval2['L3'][1][0])*self.scale
+##            meas_lines['L3'] = [(int(yval2['L3'][0][0]),int(yval2['L3'][0][1])),(int(yval2['L3'][1][0]),int(yval2['L3'][0][1]))]
+##            R1 = abs(yval2['R1'][0][0]-yval2['R1'][1][0])*self.scale
+##            meas_lines['R1'] = [(int(yval2['L1'][0][0]),int(yval2['L1'][0][1])),(int(yval2['R1'][1][0]),int(yval2['L1'][0][1]))]
+##            R2 = abs(yval2['R2'][0][0]-yval2['R2'][1][0])*self.scale
+##            meas_lines['R2'] = [(int(yval2['L2'][0][0]),int(yval2['L2'][0][1])),(int(yval2['R2'][1][0]),int(yval2['L2'][0][1]))]
+##            R3 = abs(yval2['R3'][0][0]-yval2['R3'][1][0])*self.scale
+##            meas_lines['R3'] = [(int(yval2['L3'][0][0]),int(yval2['L3'][0][1])),(int(yval2['R3'][1][0]),int(yval2['L3'][0][1]))]
+##            M1 = abs(yval2['L1'][0][0]-yval2['R1'][1][0])*self.scale
+##            meas_lines['M1'] = [(int(yval2['L1'][0][0]),int(yval2['L1'][0][1])),(int(yval2['R1'][1][0]),int(yval2['L1'][0][1]))]
+##            M2 = abs(yval2['L2'][0][0]-yval2['R2'][1][0])*self.scale
+##            meas_lines['M2'] = [(int(yval2['L2'][1][0]),int(yval2['L2'][0][1])),(int(yval2['R2'][0][0]),int(yval2['L2'][0][1]))]
+##            M3 = abs(yval2['L3'][0][0]-yval2['R3'][1][0])*self.scale
+##            meas_lines['M3'] = [(int(yval2['L3'][0][0]),int(yval2['L3'][0][1])),(int(yval2['R3'][1][0]),int(yval2['L3'][0][1]))]
+##        except ValueError as e:
+##            print(e,'Value Error')
+        pair_list = {'L1':[avg_vertlines['L1'][0],avg_vertlines['L1'][1]],
+                     'L2':[avg_vertlines['L2'][0],avg_vertlines['L2'][1]],
+                     'L3':[avg_vertlines['L3'][0],avg_vertlines['L3'][1]],
+                     'R1':[avg_vertlines['R1'][0],avg_vertlines['R1'][1]],
+                     'R2':[avg_vertlines['R2'][0],avg_vertlines['R2'][1]],
+                     'R3':[avg_vertlines['R3'][0],avg_vertlines['R3'][1]],
+                     'M1':[avg_vertlines['L1'][1],avg_vertlines['R1'][0]],
+                     'M2':[avg_vertlines['L2'][1],avg_vertlines['R2'][0]],
+                     'M3':[avg_vertlines['L3'][1],avg_vertlines['R3'][0]],
+                     'LG1':[avg_vertlines2['LG1'],avg_vertlines['L1'][0]],
+                     'LG2':[avg_vertlines2['LG2'],avg_vertlines['L2'][0]],
+                     'LG3':[avg_vertlines2['LG3'],avg_vertlines['L3'][0]],
+                     'RG1':[avg_vertlines['R1'][1],avg_vertlines2['RG1']],
+                     'RG2':[avg_vertlines['R2'][1],avg_vertlines2['RG2']],
+                     'RG3':[avg_vertlines['R3'][1],avg_vertlines2['RG3']],
+                     'RT':[avg_horzlines2['RT'],avg_horzlines['R4'][0]],
+                     'RB':[avg_horzlines['R4'][3],avg_horzlines2['RB']],
+                     'LT':[avg_horzlines2['LT'],avg_horzlines['L4'][0]],
+                     'LB':[avg_horzlines['L4'][3],avg_horzlines2['LB']],
+                     'RV1':[avg_horzlines['R4'][0],avg_horzlines['R4'][1]],
+                     'RV2':[avg_horzlines['R4'][1],avg_horzlines['R4'][2]],
+                     'RV3':[avg_horzlines['R4'][2],avg_horzlines['R4'][3]],
+                     'LV1':[avg_horzlines['L4'][0],avg_horzlines['L4'][1]],
+                     'LV2':[avg_horzlines['L4'][1],avg_horzlines['L4'][2]],
+                     'LV3':[avg_horzlines['L4'][2],avg_horzlines['L4'][3]],
+                     }
+        print(pair_list)
+        for key,[(x1,y1),(x2,y2)] in pair_list.items():
+            x1,y1,x2,y2=int(x1),int(y1),int(x2),int(y2)
+            cv2.circle(self.imcontour,(x1,y1),radius=6,thickness=8,color=(198,50,255))
+            cv2.circle(self.imcontour,(x2,y2),radius=6,thickness=8,color=(198,50,255))
+            cv2.line(self.imcontour,(x1,y1),(x2,y2),color=(0,0,255),thickness=2)
+##        LG1 = abs(vertlines2['LG1']
+        
         
 ##        print(f'{L1}, {L2}, {L3}, {M1}, {M2}, {M3}, {R1}, {R2}, {R3}')
-        with open('dimension_data.csv', 'a') as file:
-            
-            file.write(f'{self.image_name}, {L1}, {L2}, {L3}, {M1}, {M2}, {M3}, {R1}, {R2}, {R3}')
-            file.write('\n')
-        for key,line in meas_lines.items():
-            cv2.line(self.imcontour,line[0],line[1],color=(0,0,255),thickness=2)
+##        with open('dimension_data.csv', 'a') as file:
+##            
+##            file.write(f'{self.image_name}, {L1}, {L2}, {L3}, {M1}, {M2}, {M3}, {R1}, {R2}, {R3}')
+##            file.write('\n')
+##        for key,line in meas_lines.items():
+##            cv2.line(self.imcontour,line[0],line[1],color=(0,0,255),thickness=2)
         self.image.set_data(self.imcontour)
         self.canvas.draw()
 ##        self.fig.savefig(f'{self.image_name}2.png')

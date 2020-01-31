@@ -3,7 +3,10 @@ import cv2 as cv
 import numpy as np
 import tkinter as tk
 from tkinter import ttk
+from tkinter import filedialog
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+import matplotlib.animation as animation
 import matplotlib
 from matplotlib import style
 style.use('seaborn-darkgrid')
@@ -13,7 +16,7 @@ from matplotlib.backend_bases import key_press_handler
 import pickle
 from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score
-
+import pandas as pd
 
 
 class Make_Contours(tk.Frame):
@@ -22,6 +25,8 @@ class Make_Contours(tk.Frame):
         #Initialize attributes
         self.parent = parent
         parent.title('Contour Extraction')
+        self.hammerhead_df = pd.DataFrame()
+        self.hammerhead_dic={}
         self.dirs = dirs
         self.extension = extension
         self.drawmode = None
@@ -172,8 +177,8 @@ class Make_Contours(tk.Frame):
 
 
         #Testing
-        self.generate_contours()
-        self.auto_measure()
+##        self.generate_contours()
+##        self.auto_measure()
 
     def show_focus(self):
         self.displayfocus = True
@@ -229,14 +234,34 @@ class Make_Contours(tk.Frame):
         self.canvas.draw()
         
     def auto_measure_all(self):
-        with open('dimension_data.csv', 'w') as file:
-            file.write('Image Name, L1, L2, L3, M1, M2, M3, R1, R2, R3\n')
+        defaultfile=self.file.split('/')[0]
+        height, width, layers  = self.imcontour.shape
+        samplename =  filedialog.asksaveasfilename(title = "Name Sample",initialfile=defaultfile,defaultextension='.csv',filetypes = (("CSV","*.csv"),("all files","*.*")))
+        out = cv2.VideoWriter(f'{samplename}.mp4',cv2.VideoWriter_fourcc(*'DIVX'), fps=2,frameSize=(width,height))
+        key_list=['L1', 'L2', 'L3', 'R1', 'R2', 'R3', 'M1', 'M2', 'M3', 'LG1', 'LG2', 'LG3', 'RG1', 'RG2', 'RG3', 'RT', 'RB', 'LT', 'LB', 'RV1', 'RV2', 'RV3', 'LV1', 'LV2', 'LV3']
+        self.hammerhead_dic={}
+        for key in key_list:
+            self.hammerhead_dic[key]=[]
+        self.index=0
+        self.open_image()
+        rows = []
+        frames=[]
+        
         for i in self.flist:
 ##            self.fig.savefig(f'{self.image_name}1.png')
+            rows.append(self.file)
+            cv2.putText(self.imcontour,defaultfile, (100,100), cv2.FONT_HERSHEY_SIMPLEX, 1, 255)
+            out.write(self.imcontour)
             self.generate_contours()
             self.auto_measure()
+            cv2.putText(self.imcontour,defaultfile, (100,100), cv2.FONT_HERSHEY_SIMPLEX, 1, 255)
+            out.write(self.imcontour)
             self.next_image()
 ##            self.canvas.after(50)
+        out.release()
+        self.hammerhead_df = pd.DataFrame.from_dict(self.hammerhead_dic)
+        self.hammerhead_df.index= rows
+        self.hammerhead_df.to_csv(samplename)
 
     def auto_measure(self):
         yval,horzlines = {},{}
@@ -244,9 +269,13 @@ class Make_Contours(tk.Frame):
         horzlines2, vertlines2 = {},{}
         avg_horzlines, avg_vertlines = {},{}
         avg_horzlines2, avg_vertlines2 = {},{}
-        
-        self.scale=5.952380952380952 #Test Microns/pixel for Zeiss V20 microscope
+        key_list=['L1', 'L2', 'L3', 'R1', 'R2', 'R3', 'M1', 'M2', 'M3', 'LG1', 'LG2', 'LG3', 'RG1', 'RG2', 'RG3', 'RT', 'RB', 'LT', 'LB', 'RV1', 'RV2', 'RV3', 'LV1', 'LV2', 'LV3']
+        for i in key_list:
+            avg_horzlines[i], avg_vertlines[i]=[[],[]],[[],[]]
+            avg_horzlines2[i], avg_vertlines2[i]=[[],[]],[[],[]]
+        self.scale=6.097447624350289 #Test Microns/pixel for Zeiss V20 microscope
 ##        print('number of contours: ',len(self.coords))
+        
 
         contours = []
         other_contours = []
@@ -389,37 +418,41 @@ class Make_Contours(tk.Frame):
                     dist =  ((x-x2)**2+(y-y2)**2)**0.5
                     for x,y in zip(np.linspace(x,x2,int(dist)),np.linspace(y,y2,int(dist))):
                         x,y = int(x),int(y)
+##                        print(x,y)
+##                        if y==0:
+##                            print(dist)
+##                            print(x,y)
                         for name,target in ytargets.items():
                             if target-space< y <target+space:
                                 if side=='L':
                                     sideval=min([np.mean([f[0][0] for f in vertlines['L'+name]]),np.mean([f[1][0] for f in vertlines['L'+name]])])
                                     if x<=sideval:
+                                        key = 'LG'+name
                                         if x<=10:
                                             #Checks that the contour is not the edge of the image
                                             continue
-                                        key = 'LG'+name
+                                        
                                         if key not in vertlines2:
                                             vertlines2[key] = [[],[]]
                                             vertlines2[key][0].append(x)
                                             vertlines2[key][1].append(y)
-                                        avg2 = np.mean([f for f in vertlines2[key][0]])
-                                        if x<avg2-space:
-                                            vertlines2[key] = [[],[]]
-                                            vertlines2[key][0].append(x)
-                                            vertlines2[key][1].append(y)
-                                            print('test')
+##                                        avg2 = np.mean([f for f in vertlines2[key][0]])
+##                                        if x<avg2-space:
+##                                            vertlines2[key] = [[],[]]
+##                                            vertlines2[key][0].append(x)
+##                                            vertlines2[key][1].append(y)
                                         avg2 = np.mean([f for f in vertlines2[key][0]])
                                         if x>avg2+space:
-                                            continue
+                                            vertlines2[key] = [[],[]]
                                         vertlines2[key][0].append(x)
                                         vertlines2[key][1].append(y)
 ##                                        cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
                                 if side=='R':
                                     sideval=max([np.mean([f[0][1] for f in vertlines['R'+name]]),np.mean([f[1][1] for f in vertlines['R'+name]])])
                                     if x>=sideval:
+                                        key = 'RG'+name
                                         if x>=self.imcontour.shape[1]-10:
                                             continue
-                                        key = 'RG'+name
                                         if key not in vertlines2:
                                             vertlines2[key] = [[],[]]
                                             vertlines2[key][0].append(x)
@@ -434,15 +467,15 @@ class Make_Contours(tk.Frame):
                                             continue
                                         vertlines2[key][0].append(x)
                                         vertlines2[key][1].append(y)
-
                         for name,target in xtargets.items():
+                            
                             if target-space< x <target+space:
                                 if side=='L':
+                                    
                                     if y<=maxy[1]:
-                                        if y<=10:
-                                            
-                                            continue
                                         key = 'LT'
+                                        if y<=4:
+                                            continue
                                         if key not in horzlines2:
                                             horzlines2[key] = [[],[]]
                                             horzlines2[key][0].append(x)
@@ -452,9 +485,9 @@ class Make_Contours(tk.Frame):
                                             horzlines2[key][1].append(y)
                                         cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
                                     if y>=miny[1]:
+                                        key = 'LB'
                                         if y>=self.imcontour.shape[1]-10:
                                             continue
-                                        key = 'LB'
                                         if key not in horzlines2:
                                             horzlines2[key] = [[],[]]
                                             horzlines2[key][0].append(x)
@@ -465,9 +498,9 @@ class Make_Contours(tk.Frame):
                                         cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
                                 if side=='R':
                                     if y<=maxy[1]:
-                                        if y<=10:
-                                            continue
                                         key = 'RT'
+                                        if y<=4:
+                                            continue
                                         if key not in horzlines2:
                                             horzlines2[key] = [[],[]]
                                             horzlines2[key][0].append(x)
@@ -477,9 +510,9 @@ class Make_Contours(tk.Frame):
                                             horzlines2[key][1].append(y)
                                         cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
                                     if y>=miny[1]:
+                                        key = 'RB'
                                         if y>=self.imcontour.shape[1]-10:
                                             continue
-                                        key = 'RB'
                                         if key not in horzlines2:
                                             horzlines2[key] = [[],[]]
                                             horzlines2[key][0].append(x)
@@ -542,12 +575,12 @@ class Make_Contours(tk.Frame):
 ##                self.image.set_data(self.imcontour)
 ##                self.canvas.draw()
         for key,val in vertlines2.items():
-            print('vertlines2',key)
+##            print('vertlines2',key)
             x = np.mean([f for f in val[0]])
             y = np.mean([f for f in val[1]])
             avg_vertlines2[key]=[x,y]
         for key,val in vertlines.items():
-            print('vertlines',key)
+##            print('vertlines',key)
             x1 = np.mean(val[0][0])
             y1 = np.mean(val[0][1])
             x2 = np.mean(val[1][0])
@@ -555,12 +588,12 @@ class Make_Contours(tk.Frame):
             avg_vertlines[key] = [[x1,y1],[x2,y2]]
             avg_vertlines[key] = sorted(avg_vertlines[key],key=lambda k: [k[0], k[1]])
         for key,val in horzlines2.items():
-            print('horzlines2',key)
+##            print('horzlines2',key)
             x = np.mean([f for f in val[0]])
             y = np.mean([f for f in val[1]])
             avg_horzlines2[key]=[x,y]
         for key,val in horzlines.items():
-            print('horzlines',key)
+##            print('horzlines',key)
             avg_horzlines[key] = []
             for c,group in enumerate(val):
                 x = np.mean(val[c][0])
@@ -618,12 +651,26 @@ class Make_Contours(tk.Frame):
                      'LV2':[avg_horzlines['L4'][1],avg_horzlines['L4'][2]],
                      'LV3':[avg_horzlines['L4'][2],avg_horzlines['L4'][3]],
                      }
-        print(pair_list)
+        data_line = ''
         for key,[(x1,y1),(x2,y2)] in pair_list.items():
-            x1,y1,x2,y2=int(x1),int(y1),int(x2),int(y2)
+            if key not in self.hammerhead_dic:
+                self.hammerhead_dic[key]=[]
+            try:
+                x1,y1,x2,y2=int(x1),int(y1),int(x2),int(y2)
+            except TypeError or ValueError:
+                dist = "Error"
+                data_line += f'{key}, {dist}, '
+                self.hammerhead_dic[key].append(dist)
+                continue
             cv2.circle(self.imcontour,(x1,y1),radius=6,thickness=8,color=(198,50,255))
             cv2.circle(self.imcontour,(x2,y2),radius=6,thickness=8,color=(198,50,255))
             cv2.line(self.imcontour,(x1,y1),(x2,y2),color=(0,0,255),thickness=2)
+            dist = ((x1-x2)**2+(y1-y2)**2)**0.5
+            dist = round(dist,2)
+            self.hammerhead_dic[key].append(dist)
+            data_line += f'{key}, {dist}, '
+        data_line = data_line[:-2]
+##        print(data_line)
 ##        LG1 = abs(vertlines2['LG1']
         
         
@@ -785,9 +832,10 @@ class Make_Contours(tk.Frame):
     def open_image(self):
         try:
             file = self.flist[self.index]
+            self.file = file[6:]
             self.im = cv.imread(file)
             self.image_name = os.path.split(file)[1].split('.')[0]   #filename
-            self.image_strvar.set(file)
+            self.image_strvar.set(self.file)
             
         except IndexError as e:
             print(traceback.print_exc())

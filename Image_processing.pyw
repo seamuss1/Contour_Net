@@ -34,7 +34,7 @@ class Make_Contours(tk.Frame):
         self.coords = []
         self.display_distance = False
         self.displayfocus = False
-        self.focus_pts = [(250,135),(1000,900)]
+        self.focus_pts = [(250,135),(1100,1000)]
         self.expected_cellsize = 200000
         self.scale = 1
         self.parent.bind('<Key>',self.key_bindings)
@@ -168,8 +168,8 @@ class Make_Contours(tk.Frame):
         tk.Button(self.frame4,text='Clear',command=self.clear).grid(column=7,row=1)
         tk.Button(self.frame4,text='Generate Contours',command=self.generate_contours).grid(column=8,row=1)
         tk.Button(self.frame4,text='Home',command=self.go_home).grid(column=9,row=1)
-        tk.Button(self.frame4,text='Measure',command=self.auto_measure).grid(column=10,row=1)
-        tk.Button(self.frame4,text='Hammerhead',command=self.hammerhead).grid(column=11,row=1)
+        tk.Button(self.frame4,text='Measure Hammerhead',command=self.auto_measure).grid(column=10,row=1)
+        tk.Button(self.frame4,text='Rectangle',command=self.hammerhead).grid(column=11,row=1)
         self.coords = []
         self.redo = []
         self.make_list()
@@ -237,11 +237,11 @@ class Make_Contours(tk.Frame):
         defaultfile=self.file.split('/')[0]
         height, width, layers  = self.imcontour.shape
         samplename =  filedialog.asksaveasfilename(title = "Name Sample",initialfile=defaultfile,defaultextension='.csv',filetypes = (("CSV","*.csv"),("all files","*.*")))
-        out = cv2.VideoWriter(f'{samplename}.mp4',cv2.VideoWriter_fourcc(*'DIVX'), fps=2,frameSize=(width,height))
-        key_list=['L1', 'L2', 'L3', 'R1', 'R2', 'R3', 'M1', 'M2', 'M3', 'LG1', 'LG2', 'LG3', 'RG1', 'RG2', 'RG3', 'RT', 'RB', 'LT', 'LB', 'RV1', 'RV2', 'RV3', 'LV1', 'LV2', 'LV3']
+        out = cv2.VideoWriter(f'{samplename.split(".")[0]}.mp4',cv2.VideoWriter_fourcc(*'DIVX'), fps=1,frameSize=(width,height))
+##        key_list=['L1', 'L2', 'L3', 'R1', 'R2', 'R3', 'M1', 'M2', 'M3', 'LG1', 'LG2', 'LG3', 'RG1', 'RG2', 'RG3', 'RT', 'RB', 'LT', 'LB', 'RV1', 'RV2', 'RV3', 'LV1', 'LV2', 'LV3']
         self.hammerhead_dic={}
-        for key in key_list:
-            self.hammerhead_dic[key]=[]
+##        for key in key_list:
+##            self.hammerhead_dic[key]=[]
         self.index=0
         self.open_image()
         rows = []
@@ -252,18 +252,25 @@ class Make_Contours(tk.Frame):
             rows.append(self.file)
             cv2.putText(self.imcontour,defaultfile, (100,100), cv2.FONT_HERSHEY_SIMPLEX, 1, 255)
             out.write(self.imcontour)
-            self.generate_contours()
+            
             self.auto_measure()
             cv2.putText(self.imcontour,defaultfile, (100,100), cv2.FONT_HERSHEY_SIMPLEX, 1, 255)
             out.write(self.imcontour)
             self.next_image()
 ##            self.canvas.after(50)
         out.release()
+        for key,value in self.hammerhead_dic.items():
+            if len(value)==0:
+                continue
+            value.append(np.mean(value))
+        rows.append('Average:')
         self.hammerhead_df = pd.DataFrame.from_dict(self.hammerhead_dic)
         self.hammerhead_df.index= rows
         self.hammerhead_df.to_csv(samplename)
 
     def auto_measure(self):
+        self.clear()
+        self.generate_contours()
         yval,horzlines = {},{}
         horzlines, vertlines = {},{}
         horzlines2, vertlines2 = {},{}
@@ -343,7 +350,6 @@ class Make_Contours(tk.Frame):
                 #important loop because find_contour only generates nodes, points along a straight line are not included
                 
                 for x,y in zip(np.linspace(x,x2,int(dist)),np.linspace(y,y2,int(dist))):
-                    
                     x,y = int(x),int(y)
 ##                    print(x,y)
                     for name,target in ytargets.items():
@@ -376,8 +382,9 @@ class Make_Contours(tk.Frame):
                                 vertlines[key][1][1].append(y)
                             
                             cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
-                    
                     for name,target in xtargets.items():
+                        
+                        
                         if target-space< x <target+space:
     ##                        print(x,(minx[0]+maxx[0])/2)
                             key = side+name
@@ -425,13 +432,17 @@ class Make_Contours(tk.Frame):
                         for name,target in ytargets.items():
                             if target-space< y <target+space:
                                 if side=='L':
-                                    sideval=min([np.mean([f[0][0] for f in vertlines['L'+name]]),np.mean([f[1][0] for f in vertlines['L'+name]])])
+                                    sideval=min([np.mean([f for f in vertlines['L'+name][0][0]]),np.mean([f for f in vertlines['L'+name][1][0]])])
+##                                    if 300<x<340:
+##                                        if name=='3':
+##                                            print('Outside check',x,y, 'sidevalue=',sideval,f'name {name}, target {target}')
+##                                            print([np.mean([f for f in vertlines['L'+name][0][0]]),np.mean([f for f in vertlines['L'+name][1][0]])])
+##                                            print(vertlines['L'+name])
                                     if x<=sideval:
                                         key = 'LG'+name
                                         if x<=10:
                                             #Checks that the contour is not the edge of the image
                                             continue
-                                        
                                         if key not in vertlines2:
                                             vertlines2[key] = [[],[]]
                                             vertlines2[key][0].append(x)
@@ -442,13 +453,15 @@ class Make_Contours(tk.Frame):
 ##                                            vertlines2[key][0].append(x)
 ##                                            vertlines2[key][1].append(y)
                                         avg2 = np.mean([f for f in vertlines2[key][0]])
+                                        if x < avg2-space:
+                                            continue
                                         if x>avg2+space:
                                             vertlines2[key] = [[],[]]
                                         vertlines2[key][0].append(x)
                                         vertlines2[key][1].append(y)
 ##                                        cv2.circle(self.imcontour,(x,y),radius=3,thickness=2,color=(0,150,255))
                                 if side=='R':
-                                    sideval=max([np.mean([f[0][1] for f in vertlines['R'+name]]),np.mean([f[1][1] for f in vertlines['R'+name]])])
+                                    sideval=max([np.mean([f for f in vertlines['R'+name][0][1]]),np.mean([f for f in vertlines['R'+name][1][1]])])
                                     if x>=sideval:
                                         key = 'RG'+name
                                         if x>=self.imcontour.shape[1]-10:
@@ -471,7 +484,7 @@ class Make_Contours(tk.Frame):
                             
                             if target-space< x <target+space:
                                 if side=='L':
-                                    
+                                
                                     if y<=maxy[1]:
                                         key = 'LT'
                                         if y<=4:
@@ -666,7 +679,9 @@ class Make_Contours(tk.Frame):
             cv2.circle(self.imcontour,(x2,y2),radius=6,thickness=8,color=(198,50,255))
             cv2.line(self.imcontour,(x1,y1),(x2,y2),color=(0,0,255),thickness=2)
             dist = ((x1-x2)**2+(y1-y2)**2)**0.5
+            dist = dist*self.scale
             dist = round(dist,2)
+##            print(key, dist)
             self.hammerhead_dic[key].append(dist)
             data_line += f'{key}, {dist}, '
         data_line = data_line[:-2]

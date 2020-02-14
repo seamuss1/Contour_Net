@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import cm
 import numpy as np
 import pandas as pd
 
@@ -36,8 +37,7 @@ class Graph_Results:
                              
 
     def plot_position(self):
-        self.fig = plt.figure()
-        self.ax = self.fig.add_subplot(111, projection='3d')
+        
         dic = {}
         for key in self.data:
             for c,i in enumerate(self.data[key]):
@@ -50,41 +50,61 @@ class Graph_Results:
                     dic[file][key] = []
                 diff = float(i) - self.dimension_key[key]
                 dic[file][key].append(diff)
-        dic2 = {} 
+        dic2 = {}
+        dic3 = {}
         for key,value in dic.items():
             avg = []
             name = key.split('/')[-1].split('.')[0]
             for key2,value2 in value.items():
                 try:
                     avg2 = np.mean(value2)
+                    if key2 not in dic3:
+                        dic3[key2]={}
+                    dic3[key2][name] = avg2
                 except:
                     continue
                 avg.append(avg2)
             avg = np.mean(avg)
             dic2[name] = avg
 
-        x = []
-        y = []
-        dz=[]
-        z = []
-        dx = []
-        dy = []
-        c1,c2=0,0
-        for key,value in dic2.items():
-            x.append(c1)
-            y.append(c2)
-            dz.append(value)
-            z.append(0)
-            dx.append(0.5)
-            dy.append(0.5)
-            c1+=1
-            if c1==4:
-                c1=0
-                c2+=1
-        
-        self.ax.bar3d(x, y, z, dx, dy, dz, zsort='min',shade=True)
-        self.ax.autoscale_view()
-        plt.show()
+        plt.ion()
+        for name,dictionary in dic3.items():
+            self.fig = plt.figure()
+            ax = Axes3D(self.fig)
+            x = []
+            y = []
+            dz=[]
+            z = []
+            dx = []
+            dy = []
+            c1,c2=1,1
+            for key,value in dictionary.items():
+                x.append(c1)
+                y.append(c2)
+                dz.append(value)
+                z.append(0)
+                dx.append(0.5)
+                dy.append(0.5)
+                c1+=1
+                if c1==6:
+                    c1=1
+                    c2+=1
+            x,y,dz = np.array(x),np.array(y),np.array(dz)
+            labels = [item.get_text() for item in ax.get_xticklabels()]
+            labels = ['A','B','C','D','E']
+            plt.yticks(np.arange(min(y), max(y)+1, 1.0))
+            plt.xticks(np.arange(min(x), max(x)+1, 1.0))
+            
+            ax.set_title(name)
+    ##        ax.set_xticklabels(labels)
+            ax.set_yticklabels(labels)
+            ax.set_zlabel('Difference from Spec (um)')
+            surf = ax.plot_trisurf(x,y,dz)
+    ##        self.ax.autoscale_view()
+            plt.draw()
+            plt.pause(0.001)
+            self.fig.savefig(f'{name}_surfaceplot.png')
+            plt.close()
 
 
 if __name__=='__main__':

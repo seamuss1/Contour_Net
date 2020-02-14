@@ -17,8 +17,9 @@ import pickle
 from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score
 import pandas as pd
-
-
+from measure_hcell import Measure_Hcell
+import queue
+import threading
 class Make_Contours(tk.Frame):
     def __init__(self, parent, dirs=['Input',],extension='.tif'):
         tk.Frame.__init__(self)
@@ -98,7 +99,8 @@ class Make_Contours(tk.Frame):
         measmenu.add_command(label="Show Focus Area", command=self.show_focus)
         measmenu.add_command(label="Find Volume Fraction", command=self.find_volfrac)
         measmenu.add_command(label="Measure Hammerhead", command=self.auto_measure)
-        measmenu.add_command(label="Auto-Measure ALL", command=self.auto_measure_all)
+        measmenu.add_command(label="Auto-Measure ALL (Hammerhead)", command=self.auto_measure_all)
+        measmenu.add_command(label="Measure H-Cell", command=self.measure_hcell)
         measmenu.add_separator()
         menubar.add_cascade(label="Measure", menu=measmenu)
 
@@ -183,7 +185,16 @@ class Make_Contours(tk.Frame):
 ##        self.generate_contours()
 ##        self.auto_measure()
 ##        self.find_volfrac()
-
+        self.measure_hcell()
+    def measure_hcell(self):
+        self.queue = queue.Queue()
+        thread_ = threading.Thread(target=Measure_Hcell,name="Thread1",
+                                   args=[self.coords,self.fileID,self.queue])
+        thread_.start()
+        self.generate_contours()
+##        Measure_Hcell(contours=self.coords)
+        response = self.queue.get()
+        print(response)
     def find_pixel(self):
         if self.pixel_value == True:
             self.pixel_value = False

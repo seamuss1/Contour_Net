@@ -7,6 +7,8 @@ from tkinter import filedialog
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import matplotlib.animation as animation
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import cm
 import matplotlib
 from matplotlib import style
 style.use('seaborn-darkgrid')
@@ -18,6 +20,7 @@ from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score
 import pandas as pd
 from measure_hcell import Measure_Hcell
+from graph_results import Graph_Results
 import queue
 import threading
 class Make_Contours(tk.Frame):
@@ -35,6 +38,8 @@ class Make_Contours(tk.Frame):
         self.coords = []
         self.display_distance = False
         self.displayfocus = False
+        self.surfaceplot_mode=False
+        self.surfaceplot_index=0
         self.pixel_value = False
         self.focus_pts = [(250,135),(1100,1000)]
         self.expected_cellsize = 200000
@@ -100,6 +105,7 @@ class Make_Contours(tk.Frame):
         measmenu.add_command(label="Find Volume Fraction", command=self.find_volfrac)
         measmenu.add_command(label="Measure Hammerhead", command=self.auto_measure)
         measmenu.add_command(label="Auto-Measure ALL (Hammerhead)", command=self.auto_measure_all)
+        measmenu.add_command(label="Hammerhead Surface plot ", command=self.hammerhead_surfaceplot)
         measmenu.add_command(label="Measure H-Cell", command=self.measure_hcell)
         measmenu.add_separator()
         menubar.add_cascade(label="Measure", menu=measmenu)
@@ -110,6 +116,7 @@ class Make_Contours(tk.Frame):
 
         
         self.fig,self.ax = plt.subplots(1,1)
+        
         #plt.gca().invert_yaxis()
         self.ax.set_axis_off()
         self.fig.subplots_adjust(left=0.03, bottom=0.07, right=0.98, top=0.97, wspace=0, hspace=0)
@@ -185,7 +192,16 @@ class Make_Contours(tk.Frame):
 ##        self.generate_contours()
 ##        self.auto_measure()
 ##        self.find_volfrac()
-        self.measure_hcell()
+##        self.measure_hcell()
+    def hammerhead_surfaceplot(self):
+        self.results_filename =  filedialog.askopenfilename(title = "Select Results File",filetypes = (("CSV","*.csv"),("all files","*.*")))
+        if self.results_filename == '':
+            return
+        self.graph_results = Graph_Results(self.results_filename)
+        self.plotdic = self.graph_results.get_plotdic()
+        self.surfaceplot_mode=True
+        self.update_plot()
+        
     def measure_hcell(self):
         self.queue = queue.Queue()
         thread_ = threading.Thread(target=Measure_Hcell,name="Thread1",
@@ -195,6 +211,7 @@ class Make_Contours(tk.Frame):
 ##        Measure_Hcell(contours=self.coords)
         response = self.queue.get()
         print(response)
+        
     def find_pixel(self):
         if self.pixel_value == True:
             self.pixel_value = False
@@ -967,6 +984,23 @@ class Make_Contours(tk.Frame):
         
     def update_plot(self):
         self.imcontour = np.copy(self.im)
+        if self.surfaceplot_mode==True:
+            try:
+                self.ax.remove()
+                self.ax3D.remove()
+            except:
+                pass
+            try:
+                self.ax3D==False
+            except:
+                self.ax3D = Axes3D(self.fig)
+            keys = [f for f in self.plotdic]
+            self.ax3D.set_title('{} Design Value = {} um'.format(keys[self.surfaceplot_index],self.graph_results.dimension_key[keys[self.surfaceplot_index]]))
+            surf = self.ax3D.plot_trisurf(self.plotdic[keys[self.surfaceplot_index]][0],self.plotdic[keys[self.surfaceplot_index]][1],self.plotdic[keys[self.surfaceplot_index]][2],cmap=cm.coolwarm)
+            cb = self.fig.colorbar(surf, shrink=0.5, aspect=5)
+            self.canvas.draw()
+            cb.remove()
+            return
         for c,i in enumerate(self.coords):
             points = np.array(i)
             colr = (0,255,0)
@@ -1004,8 +1038,20 @@ class Make_Contours(tk.Frame):
         if event.keysym == 'r':
             self.redo_draw()
         if event.keysym == 'Right':
+            if self.surfaceplot_mode==True:
+                self.surfaceplot_index+=1
+                if self.surfaceplot_index>24:
+                    self.surfaceplot_index-=1
+                self.update_plot()
+                return
             self.next_image()
         if event.keysym == 'Left':
+            if self.surfaceplot_mode==True:
+                self.surfaceplot_index-=1
+                if self.surfaceplot_index>0:
+                    self.surfaceplot_index+=1
+                self.update_plot()
+                return
             self.prev_image()
         if event.keysym == 'p':
             self.drawmode = None
